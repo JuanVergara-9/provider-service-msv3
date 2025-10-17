@@ -3,7 +3,10 @@ const { conflict, notFound } = require('../utils/httpError');
 const { Op, Sequelize } = require('sequelize');
 
 async function getById(id){
-  const p = await Provider.findByPk(id, { include:[{ model: Category, as:'category', attributes:['id','name','slug','icon'] }] });
+  const p = await Provider.findByPk(id, { include:[
+    { model: Category, as:'category', attributes:['id','name','slug','icon'] },
+    { model: Category, as:'categories', attributes:['id','name','slug','icon'] }
+  ] });
   if(!p) throw notFound('PROVIDER.NOT_FOUND','Proveedor no encontrado');
   return p;
 }
@@ -19,7 +22,10 @@ async function getMine(userId){
   
   const query = { 
     where: { user_id: userId }, 
-    include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'slug', 'icon'] }] 
+    include: [
+      { model: Category, as: 'category', attributes: ['id', 'name', 'slug', 'icon'] },
+      { model: Category, as: 'categories', attributes: ['id', 'name', 'slug', 'icon'] }
+    ] 
   };
   
   console.log('[getMine] Sequelize query:', JSON.stringify(query, null, 2));
@@ -39,21 +45,62 @@ async function createOrGetMine(userId, payload){
   if(existing) return existing; // idempotente
 
   // valida existencia de categoría
-  const cat = await Category.findByPk(payload.category_id);
-  if(!cat) throw notFound('CATEGORY.NOT_FOUND','Categoría inexistente');
+  // Accept either category_id (legacy) or category_ids (new)
+  let categoryIds = [];
+  if (Array.isArray(payload.category_ids) && payload.category_ids.length > 0) {
+    categoryIds = payload.category_ids;
+  } else if (payload.category_id) {
+    categoryIds = [payload.category_id];
+  }
+  if (categoryIds.length === 0) {
+    throw notFound('CATEGORY.REQUIRED','Al menos una categoría es requerida');
+  }
+  const found = await Category.findAll({ where: { id: { [Op.in]: categoryIds } } });
+  if (found.length !== categoryIds.length) throw notFound('CATEGORY.NOT_FOUND','Una o más categorías inexistentes');
 
-  return Provider.create({ ...payload, user_id:userId });
+  const provider = await Provider.create({
+    user_id: userId,
+    category_id: categoryIds[0], // keep primary for legacy filters
+    first_name: payload.first_name,
+    last_name: payload.last_name,
+    contact_email: payload.contact_email,
+    phone_e164: payload.phone_e164,
+    whatsapp_e164: payload.whatsapp_e164,
+    description: payload.description,
+    province: payload.province,
+    city: payload.city,
+    address: payload.address,
+    lat: payload.lat,
+    lng: payload.lng,
+    years_experience: payload.years_experience,
+    price_hint: payload.price_hint,
+    emergency_available: payload.emergency_available,
+    business_hours: payload.business_hours
+  });
+  if (categoryIds.length > 0) await provider.setCategories(categoryIds);
+  return getById(provider.id);
 }
 
 async function updateMine(userId, payload){
   const mine = await getMine(userId);
   if(!mine) throw notFound('PROVIDER.NOT_FOUND','Aún no tienes perfil de proveedor');
-  if(payload.category_id){
-    const cat = await Category.findByPk(payload.category_id);
-    if(!cat) throw notFound('CATEGORY.NOT_FOUND','Categoría inexistente');
+  // Handle categories updates
+  let categoryIds = null;
+  if (Array.isArray(payload.category_ids)) {
+    categoryIds = payload.category_ids;
+  } else if (payload.category_id) {
+    categoryIds = [payload.category_id];
   }
-  await mine.update(payload);
-  return mine;
+  if (categoryIds) {
+    const found = await Category.findAll({ where: { id: { [Op.in]: categoryIds } } });
+    if (found.length !== categoryIds.length) throw notFound('CATEGORY.NOT_FOUND','Una o más categorías inexistentes');
+    // keep first as primary
+    await mine.update({ ...payload, category_id: categoryIds[0] });
+    await mine.setCategories(categoryIds);
+  } else {
+    await mine.update(payload);
+  }
+  return getMine(userId);
 }
 
 async function setAvatar(userId, avatar) {
@@ -85,9 +132,12 @@ async function list(params={}){
   if (params.status) where.status = params.status;
 
   if (params.categorySlug) {
-    include.push({ model: Category, as:'category', where:{ slug: params.categorySlug }, required:true, attributes:['id','name','slug','icon'] });
+    // match either primary category or any of many-to-many categories
+    include.push({ model: Category, as:'category', where:{ slug: params.categorySlug }, required:false, attributes:['id','name','slug','icon'] });
+    include.push({ model: Category, as:'categories', where:{ slug: params.categorySlug }, required:false, attributes:['id','name','slug','icon'] });
   } else {
     include.push({ model: Category, as:'category', attributes:['id','name','slug','icon'] });
+    include.push({ model: Category, as:'categories', attributes:['id','name','slug','icon'] });
   }
 
   const query = { where, include, limit: Math.min(Number(params.limit||20), 100), offset: Number(params.offset||0), order:[['id','ASC']] };
@@ -117,6 +167,9 @@ async function list(params={}){
     query.order = Sequelize.literal('distance_km ASC NULLS LAST');
   }
 
+  // dedupe when both includes match; use distinct true
+  query.distinct = true;
+  query.col = 'Provider.id';
   return Provider.findAndCountAll(query);
 }
 

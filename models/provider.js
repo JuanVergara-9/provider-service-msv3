@@ -26,7 +26,15 @@ module.exports = (sequelize, DataTypes) => {
   }, { tableName: 'providers', underscored: true });
 
   Provider.associate = (models) => {
+    // Legacy main category (kept for backward compatibility)
     Provider.belongsTo(models.Category, { as: 'category', foreignKey: 'category_id' });
+    // New many-to-many categories
+    Provider.belongsToMany(models.Category, {
+      as: 'categories',
+      through: 'provider_categories',
+      foreignKey: 'provider_id',
+      otherKey: 'category_id'
+    });
   };
 
   return Provider;

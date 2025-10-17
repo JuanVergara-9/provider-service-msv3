@@ -3,7 +3,8 @@ const svc = require('../services/provider.service');
 const { uploadBuffer, destroy } = require('../utils/cloudinary');
 
 const createSchema = z.object({
-  category_id: z.number().int(),
+  category_id: z.number().int().optional(), // legacy
+  category_ids: z.array(z.number().int()).min(1).optional(), // new many-to-many
   first_name: z.string().min(1).max(60),
   last_name: z.string().min(1).max(60),
   contact_email: z.string().email().max(160).optional(),

@@ -9,7 +9,15 @@ module.exports = (sequelize, DataTypes) => {
   }, { tableName: 'categories', underscored: true });
 
   Category.associate = (models) => {
+    // Legacy one-to-many
     Category.hasMany(models.Provider, { as: 'providers', foreignKey: 'category_id' });
+    // New many-to-many
+    Category.belongsToMany(models.Provider, {
+      as: 'providers_many',
+      through: 'provider_categories',
+      foreignKey: 'category_id',
+      otherKey: 'provider_id'
+    });
   };
 
   return Category;
