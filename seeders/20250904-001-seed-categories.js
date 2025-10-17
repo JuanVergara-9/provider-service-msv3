@@ -7,7 +7,7 @@ module.exports = {
       { name: 'Gasistas', slug: 'gasistas', icon: 'flame', sort_order: 2 },
       { name: 'Electricidad', slug: 'electricidad', icon: 'zap', sort_order: 3 },
       { name: 'Jardinería', slug: 'jardineria', icon: 'leaf', sort_order: 4 },
-      { name: 'Mantenimiento y limpieza de piletas', slug: 'mantenimiento-limpieza-piletas', icon: 'pool', sort_order: 5 },
+      { name: 'Mantenimiento y limpieza de piletas', slug: 'mantenimiento-limpieza-piletas', icon: 'droplets', sort_order: 5 },
       { name: 'Reparación de electrodomésticos', slug: 'reparacion-electrodomesticos', icon: 'wrench', sort_order: 6 }
     ];
 
