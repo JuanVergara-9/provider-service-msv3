@@ -128,16 +128,21 @@ async function clearAvatar(userId) {
 async function list(params={}){
   const where = {};
   const include = [];
+  try { console.log('[list] params:', params); } catch(_e) {}
   if (params.city) where.city = params.city;
   if (params.status) where.status = params.status;
 
   if (params.categorySlug) {
-    // match either primary category or any of many-to-many categories
-    include.push({ model: Category, as:'category', where:{ slug: params.categorySlug }, required:false, attributes:['id','name','slug','icon'] });
-    include.push({ model: Category, as:'categories', where:{ slug: params.categorySlug }, required:false, attributes:['id','name','slug','icon'] });
+    // Use OR condition to match either primary category or any of many-to-many categories
+    where[Op.or] = [
+      { '$category.slug$': params.categorySlug },
+      { '$categories.slug$': params.categorySlug }
+    ];
+    include.push({ model: Category, as:'category', required: false, attributes:['id','name','slug','icon'] });
+    include.push({ model: Category, as:'categories', required: false, attributes:['id','name','slug','icon'] });
   } else {
-    include.push({ model: Category, as:'category', attributes:['id','name','slug','icon'] });
-    include.push({ model: Category, as:'categories', attributes:['id','name','slug','icon'] });
+    include.push({ model: Category, as:'category', required: false, attributes:['id','name','slug','icon'] });
+    include.push({ model: Category, as:'categories', required: false, attributes:['id','name','slug','icon'] });
   }
 
   const query = { where, include, limit: Math.min(Number(params.limit||20), 100), offset: Number(params.offset||0), order:[['id','ASC']] };
@@ -167,10 +172,18 @@ async function list(params={}){
     query.order = Sequelize.literal('distance_km ASC NULLS LAST');
   }
 
-  // dedupe when both includes match; use distinct true
+  // Evitar problemas con includes + limit y filtros por alias ($alias.col$)
+  // distinct para que el count sea correcto con joins y subQuery:false para que
+  // el WHERE con $category.slug$/$categories.slug$ funcione correctamente.
   query.distinct = true;
-  query.col = 'Provider.id';
-  return Provider.findAndCountAll(query);
+  query.subQuery = false;
+  try {
+    return await Provider.findAndCountAll(query);
+  } catch (error) {
+    console.error('[list] Query error:', error.message);
+    console.error('[list] Query:', JSON.stringify(query, null, 2));
+    throw error;
+  }
 }
 
 module.exports = { getById, getMine, createOrGetMine, updateMine, list, setAvatar, clearAvatar };
