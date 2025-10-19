@@ -19,6 +19,7 @@ const createSchema = z.object({
   years_experience: z.number().int().min(0).max(80).optional(),
   price_hint: z.number().int().min(0).max(10000000).optional(),
   emergency_available: z.boolean().optional(),
+  is_licensed: z.boolean().optional(),
   business_hours: z.any().optional()
 }).strict();
 
@@ -75,6 +76,8 @@ async function updateMine(req, res, next) {
 }
 async function list(req,res,next){
   try{
+    const licensedParam = (req.query.licensed || '').toString().toLowerCase();
+    const isLicensed = licensedParam === 'true' || licensedParam === '1' ? true : undefined;
     const r = await svc.list({
       categorySlug: req.query.category,
       city: req.query.city,
@@ -83,7 +86,8 @@ async function list(req,res,next){
       radiusKm: req.query.radiusKm,
       limit: req.query.limit,
       offset: req.query.offset,
-      status: 'active'
+      status: 'active',
+      isLicensed
     });
     res.json({ count: r.count, items: r.rows });
   } catch(e){ next(e); }

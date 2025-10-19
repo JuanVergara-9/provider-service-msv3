@@ -75,6 +75,7 @@ async function createOrGetMine(userId, payload){
     years_experience: payload.years_experience,
     price_hint: payload.price_hint,
     emergency_available: payload.emergency_available,
+    is_licensed: !!payload.is_licensed,
     business_hours: payload.business_hours
   });
   if (categoryIds.length > 0) await provider.setCategories(categoryIds);
@@ -131,6 +132,7 @@ async function list(params={}){
   try { console.log('[list] params:', params); } catch(_e) {}
   if (params.city) where.city = params.city;
   if (params.status) where.status = params.status;
+  if (params.isLicensed === true) where.is_licensed = true;
 
   if (params.categorySlug) {
     // Use OR condition to match either primary category or any of many-to-many categories

@@ -19,6 +19,7 @@ module.exports = (sequelize, DataTypes) => {
     years_experience: DataTypes.SMALLINT,
     price_hint: DataTypes.INTEGER,
     emergency_available: { type: DataTypes.BOOLEAN, defaultValue: false },
+    is_licensed: { type: DataTypes.BOOLEAN, defaultValue: false },
     business_hours: DataTypes.JSONB,
     avatar_url: DataTypes.STRING(512),
     avatar_public_id: DataTypes.STRING(256),
