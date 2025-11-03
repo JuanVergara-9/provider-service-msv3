@@ -25,6 +25,51 @@ const createSchema = z.object({
 
 const updateSchema = createSchema.partial();
 
+// ---- Availability schema (MVP) ----
+const rangeSchema = z.object({
+  start: z.number().int().min(0).max(1439),
+  end: z.number().int().min(1).max(1440)
+}).refine(v => v.start < v.end, { message: 'start < end' });
+
+const businessHoursSchema = z.object({
+  timezone: z.string().max(64).optional(),
+  mon: z.array(rangeSchema).optional(),
+  tue: z.array(rangeSchema).optional(),
+  wed: z.array(rangeSchema).optional(),
+  thu: z.array(rangeSchema).optional(),
+  fri: z.array(rangeSchema).optional(),
+  sat: z.array(rangeSchema).optional(),
+  sun: z.array(rangeSchema).optional()
+}).strict();
+
+function normalizeBusinessHours(bh){
+  const base = { mon:[], tue:[], wed:[], thu:[], fri:[], sat:[], sun:[] };
+  const src = bh || {};
+  const out = { ...base, ...src };
+  // ordenar y eliminar solapes simples
+  for (const d of Object.keys(base)) {
+    if (!Array.isArray(out[d])) { out[d] = []; continue; }
+    const sorted = [...out[d]].sort((a,b)=>a.start-b.start);
+    const merged = [];
+    for (const r of sorted) {
+      if (!merged.length || r.start > merged[merged.length-1].end) merged.push({ start:r.start, end:r.end });
+      else merged[merged.length-1].end = Math.max(merged[merged.length-1].end, r.end);
+    }
+    out[d] = merged;
+  }
+  return out;
+}
+
+const DEFAULT_HOURS = {
+  mon: [{ start: 8*60, end: 18*60 }],
+  tue: [{ start: 8*60, end: 18*60 }],
+  wed: [{ start: 8*60, end: 18*60 }],
+  thu: [{ start: 8*60, end: 18*60 }],
+  fri: [{ start: 8*60, end: 18*60 }],
+  sat: [{ start: 9*60, end: 13*60 }],
+  sun: []
+};
+
 async function getById(req,res,next){ try{ const p=await svc.getById(Number(req.params.id)); res.json({ provider:p }); } catch(e){ next(e); } }
 async function getMine(req, res, next) {
   try {
@@ -146,3 +191,43 @@ async function deleteAvatar(req, res, next) {
 
 module.exports.uploadAvatar = uploadAvatar;
 module.exports.deleteAvatar = deleteAvatar;
+
+// ---- Availability endpoints ----
+async function getAvailability(req, res, next){
+  try {
+    const p = await svc.getById(Number(req.params.id));
+    const bh = p.business_hours ? normalizeBusinessHours(p.business_hours) : DEFAULT_HOURS;
+    res.json({ availability: { businessHours: bh, emergencyAvailable: !!p.emergency_available } });
+  } catch(e){ next(e); }
+}
+
+async function getMyAvailability(req, res, next){
+  try {
+    const userId = Number(req.user?.userId);
+    if (!userId || isNaN(userId)) return res.status(401).json({ error:{ code:'PROVIDER.UNAUTHORIZED', message:'No autorizado' } });
+    const p = await svc.getMine(userId);
+    if (!p) return res.status(404).json({ error:{ code:'PROVIDER.NOT_FOUND', message:'Aún no tienes perfil de proveedor' } });
+    const bh = p.business_hours ? normalizeBusinessHours(p.business_hours) : DEFAULT_HOURS;
+    res.json({ availability: { businessHours: bh, emergencyAvailable: !!p.emergency_available } });
+  } catch(e){ next(e); }
+}
+
+async function updateMyAvailability(req, res, next){
+  try {
+    const userId = Number(req.user?.userId);
+    if (!userId || isNaN(userId)) return res.status(401).json({ error:{ code:'PROVIDER.UNAUTHORIZED', message:'No autorizado' } });
+    const body = req.body || {};
+    const bh = body.businessHours ? businessHoursSchema.parse(body.businessHours) : undefined;
+    const emergency = typeof body.emergencyAvailable === 'boolean' ? body.emergencyAvailable : undefined;
+    const payload = {};
+    if (bh) payload.business_hours = normalizeBusinessHours(bh);
+    if (typeof emergency === 'boolean') payload.emergency_available = emergency;
+    const updated = await svc.updateMine(userId, payload);
+    const out = updated.business_hours ? normalizeBusinessHours(updated.business_hours) : DEFAULT_HOURS;
+    res.json({ availability: { businessHours: out, emergencyAvailable: !!updated.emergency_available } });
+  } catch(e){ next(e); }
+}
+
+module.exports.getAvailability = getAvailability;
+module.exports.getMyAvailability = getMyAvailability;
+module.exports.updateMyAvailability = updateMyAvailability;

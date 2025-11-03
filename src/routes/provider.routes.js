@@ -9,6 +9,10 @@ router.get('/mine', requireAuth, ctrl.getMine); // alias para compatibilidad con
 router.post('/mine', requireAuth, ctrl.createMine);
 router.put('/mine', requireAuth, ctrl.updateMine);
 
+// Availability (edición desde perfil, sin tocar registro)
+router.get('/mine/availability', requireAuth, ctrl.getMyAvailability);
+router.put('/mine/availability', requireAuth, ctrl.updateMyAvailability);
+
 // Avatar upload/delete
 router.post('/mine/avatar', requireAuth, uploadImage.single('file'), ctrl.uploadAvatar);
 router.delete('/mine/avatar', requireAuth, ctrl.deleteAvatar);
@@ -18,6 +22,9 @@ router.post('/me', requireAuth, ctrl.createMine);
 router.put('/me', requireAuth, ctrl.updateMine);
 
 // Ruta con parámetro numérico al final para evitar capturar '/mine'
+// Consultar disponibilidad pública por id
+router.get('/:id/availability', ctrl.getAvailability);
+
 // Ruta genérica al final (orden importa). Evita capturar '/mine' por estar antes.
 router.get('/:id', ctrl.getById); // público
 
