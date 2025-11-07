@@ -138,8 +138,6 @@ async function list(req,res,next){
   } catch(e){ next(e); }
 }
 
-module.exports = { getById, getMine, createMine, updateMine, list };
-
 async function uploadAvatar(req, res, next) {
   try {
     const userId = Number(req.user?.userId);
@@ -189,9 +187,6 @@ async function deleteAvatar(req, res, next) {
   } catch (e) { next(e); }
 }
 
-module.exports.uploadAvatar = uploadAvatar;
-module.exports.deleteAvatar = deleteAvatar;
-
 // ---- Availability endpoints ----
 async function getAvailability(req, res, next){
   try {
@@ -228,6 +223,15 @@ async function updateMyAvailability(req, res, next){
   } catch(e){ next(e); }
 }
 
-module.exports.getAvailability = getAvailability;
-module.exports.getMyAvailability = getMyAvailability;
-module.exports.updateMyAvailability = updateMyAvailability;
+module.exports = {
+  getById,
+  getMine,
+  createMine,
+  updateMine,
+  list,
+  uploadAvatar,
+  deleteAvatar,
+  getAvailability,
+  getMyAvailability,
+  updateMyAvailability
+};

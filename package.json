@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "dev": "nodemon src/index.js",
+    "dev": "node node_modules/nodemon/bin/nodemon.js src/index.js",
     "start": "node src/index.js",
     "db:migrate": "sequelize db:migrate",
     "db:migrate:undo": "sequelize db:migrate:undo",
