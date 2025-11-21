@@ -232,6 +232,15 @@ async function providerSummary(req, res, next) {
   }
 }
 
+async function providerUserIds(req, res, next) {
+  try {
+    const result = await svc.getProviderUserIds();
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getById,
   getMine,
@@ -243,5 +252,6 @@ module.exports = {
   getAvailability,
   getMyAvailability,
   updateMyAvailability,
-  providerSummary
+  providerSummary,
+  providerUserIds
 };

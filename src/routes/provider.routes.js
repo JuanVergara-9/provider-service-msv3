@@ -5,6 +5,7 @@ const { uploadImage } = require('../middlewares/upload.middleware');
 
 router.get('/', ctrl.list); // público (listado con filtros)
 router.get('/stats/summary', ctrl.providerSummary); // Resumen de proveedores (total, activos)
+router.get('/user-ids', ctrl.providerUserIds); // Lista de user_ids de proveedores (para auth-service)
 // Rutas específicas deben ir ANTES de rutas genéricas con parámetros
 router.get('/mine', requireAuth, ctrl.getMine); // alias para compatibilidad con el frontend
 router.post('/mine', requireAuth, ctrl.createMine);

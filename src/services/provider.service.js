@@ -196,4 +196,13 @@ async function getProviderSummary() {
   return { total, active };
 }
 
-module.exports = { getById, getMine, createOrGetMine, updateMine, list, setAvatar, clearAvatar, getProviderSummary };
+async function getProviderUserIds() {
+  const providers = await Provider.findAll({
+    attributes: ['user_id'],
+    raw: true
+  });
+  const userIds = providers.map(p => p.user_id).filter(id => id != null);
+  return { userIds };
+}
+
+module.exports = { getById, getMine, createOrGetMine, updateMine, list, setAvatar, clearAvatar, getProviderSummary, getProviderUserIds };
