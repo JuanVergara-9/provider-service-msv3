@@ -42,18 +42,18 @@ const businessHoursSchema = z.object({
   sun: z.array(rangeSchema).optional()
 }).strict();
 
-function normalizeBusinessHours(bh){
-  const base = { mon:[], tue:[], wed:[], thu:[], fri:[], sat:[], sun:[] };
+function normalizeBusinessHours(bh) {
+  const base = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] };
   const src = bh || {};
   const out = { ...base, ...src };
   // ordenar y eliminar solapes simples
   for (const d of Object.keys(base)) {
     if (!Array.isArray(out[d])) { out[d] = []; continue; }
-    const sorted = [...out[d]].sort((a,b)=>a.start-b.start);
+    const sorted = [...out[d]].sort((a, b) => a.start - b.start);
     const merged = [];
     for (const r of sorted) {
-      if (!merged.length || r.start > merged[merged.length-1].end) merged.push({ start:r.start, end:r.end });
-      else merged[merged.length-1].end = Math.max(merged[merged.length-1].end, r.end);
+      if (!merged.length || r.start > merged[merged.length - 1].end) merged.push({ start: r.start, end: r.end });
+      else merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, r.end);
     }
     out[d] = merged;
   }
@@ -61,27 +61,27 @@ function normalizeBusinessHours(bh){
 }
 
 const DEFAULT_HOURS = {
-  mon: [{ start: 8*60, end: 18*60 }],
-  tue: [{ start: 8*60, end: 18*60 }],
-  wed: [{ start: 8*60, end: 18*60 }],
-  thu: [{ start: 8*60, end: 18*60 }],
-  fri: [{ start: 8*60, end: 18*60 }],
-  sat: [{ start: 9*60, end: 13*60 }],
+  mon: [{ start: 8 * 60, end: 18 * 60 }],
+  tue: [{ start: 8 * 60, end: 18 * 60 }],
+  wed: [{ start: 8 * 60, end: 18 * 60 }],
+  thu: [{ start: 8 * 60, end: 18 * 60 }],
+  fri: [{ start: 8 * 60, end: 18 * 60 }],
+  sat: [{ start: 9 * 60, end: 13 * 60 }],
   sun: []
 };
 
-async function getById(req,res,next){ try{ const p=await svc.getById(Number(req.params.id)); res.json({ provider:p }); } catch(e){ next(e); } }
+async function getById(req, res, next) { try { const p = await svc.getById(Number(req.params.id)); res.json({ provider: p }); } catch (e) { next(e); } }
 async function getMine(req, res, next) {
   try {
     console.log('[getMine] req.user:', req.user);
     const userId = Number(req.user?.userId);
     console.log('[getMine] userId after Number():', userId, typeof userId);
-    
+
     if (!userId || isNaN(userId)) {
       console.error('[getMine] Invalid userId:', userId);
       return res.status(401).json({ error: { code: 'PROVIDER.UNAUTHORIZED', message: 'No autorizado: userId inválido' } });
     }
-    
+
     console.log('[getMine] Calling svc.getMine with userId:', userId);
     const p = await svc.getMine(userId);
     console.log('[getMine] Result from svc.getMine:', p ? 'Found provider' : 'No provider found');
@@ -119,8 +119,8 @@ async function updateMine(req, res, next) {
     next(e);
   }
 }
-async function list(req,res,next){
-  try{
+async function list(req, res, next) {
+  try {
     const licensedParam = (req.query.licensed || '').toString().toLowerCase();
     const isLicensed = licensedParam === 'true' || licensedParam === '1' ? true : undefined;
     const r = await svc.list({
@@ -135,7 +135,7 @@ async function list(req,res,next){
       isLicensed
     });
     res.json({ count: r.count, items: r.rows });
-  } catch(e){ next(e); }
+  } catch (e) { next(e); }
 }
 
 async function uploadAvatar(req, res, next) {
@@ -180,7 +180,7 @@ async function deleteAvatar(req, res, next) {
     if (!mine) return res.status(404).json({ error: { code: 'PROVIDER.NOT_FOUND', message: 'Aún no tienes perfil de proveedor' } });
 
     if (mine.avatar_public_id) {
-      try { await destroy(mine.avatar_public_id); } catch(_e) { /* ignore */ }
+      try { await destroy(mine.avatar_public_id); } catch (_e) { /* ignore */ }
     }
     const updated = await svc.clearAvatar(userId);
     res.status(200).json({ provider: updated });
@@ -188,29 +188,29 @@ async function deleteAvatar(req, res, next) {
 }
 
 // ---- Availability endpoints ----
-async function getAvailability(req, res, next){
+async function getAvailability(req, res, next) {
   try {
     const p = await svc.getById(Number(req.params.id));
     const bh = p.business_hours ? normalizeBusinessHours(p.business_hours) : DEFAULT_HOURS;
     res.json({ availability: { businessHours: bh, emergencyAvailable: !!p.emergency_available } });
-  } catch(e){ next(e); }
+  } catch (e) { next(e); }
 }
 
-async function getMyAvailability(req, res, next){
+async function getMyAvailability(req, res, next) {
   try {
     const userId = Number(req.user?.userId);
-    if (!userId || isNaN(userId)) return res.status(401).json({ error:{ code:'PROVIDER.UNAUTHORIZED', message:'No autorizado' } });
+    if (!userId || isNaN(userId)) return res.status(401).json({ error: { code: 'PROVIDER.UNAUTHORIZED', message: 'No autorizado' } });
     const p = await svc.getMine(userId);
-    if (!p) return res.status(404).json({ error:{ code:'PROVIDER.NOT_FOUND', message:'Aún no tienes perfil de proveedor' } });
+    if (!p) return res.status(404).json({ error: { code: 'PROVIDER.NOT_FOUND', message: 'Aún no tienes perfil de proveedor' } });
     const bh = p.business_hours ? normalizeBusinessHours(p.business_hours) : DEFAULT_HOURS;
     res.json({ availability: { businessHours: bh, emergencyAvailable: !!p.emergency_available } });
-  } catch(e){ next(e); }
+  } catch (e) { next(e); }
 }
 
-async function updateMyAvailability(req, res, next){
+async function updateMyAvailability(req, res, next) {
   try {
     const userId = Number(req.user?.userId);
-    if (!userId || isNaN(userId)) return res.status(401).json({ error:{ code:'PROVIDER.UNAUTHORIZED', message:'No autorizado' } });
+    if (!userId || isNaN(userId)) return res.status(401).json({ error: { code: 'PROVIDER.UNAUTHORIZED', message: 'No autorizado' } });
     const body = req.body || {};
     const bh = body.businessHours ? businessHoursSchema.parse(body.businessHours) : undefined;
     const emergency = typeof body.emergencyAvailable === 'boolean' ? body.emergencyAvailable : undefined;
@@ -220,7 +220,16 @@ async function updateMyAvailability(req, res, next){
     const updated = await svc.updateMine(userId, payload);
     const out = updated.business_hours ? normalizeBusinessHours(updated.business_hours) : DEFAULT_HOURS;
     res.json({ availability: { businessHours: out, emergencyAvailable: !!updated.emergency_available } });
-  } catch(e){ next(e); }
+  } catch (e) { next(e); }
+}
+
+async function providerSummary(req, res, next) {
+  try {
+    const summary = await svc.getProviderSummary();
+    res.json(summary);
+  } catch (err) {
+    next(err);
+  }
 }
 
 module.exports = {
@@ -233,5 +242,6 @@ module.exports = {
   deleteAvatar,
   getAvailability,
   getMyAvailability,
-  updateMyAvailability
+  updateMyAvailability,
+  providerSummary
 };
