@@ -241,6 +241,101 @@ async function providerUserIds(req, res, next) {
   }
 }
 
+// Subida de documentos de identidad
+async function uploadIdentityDocs(req, res, next) {
+  try {
+    const userId = Number(req.user?.userId);
+    if (!userId || isNaN(userId)) {
+      return res.status(401).json({ error: { code: 'PROVIDER.UNAUTHORIZED', message: 'No autorizado: userId inválido' } });
+    }
+
+    const files = req.files || {};
+    
+    if (!files.dni_front || !files.dni_back || !files.selfie) {
+      return res.status(400).json({ error: { code: 'PROVIDER.MISSING_FILES', message: 'Faltan documentos (Frente, Dorso o Selfie)' } });
+    }
+
+    const mine = await svc.getMine(userId);
+    if (!mine) return res.status(404).json({ error: { code: 'PROVIDER.NOT_FOUND', message: 'Aún no tienes perfil de proveedor' } });
+
+    // Función auxiliar para subir a Cloudinary en una carpeta privada/admin
+    const uploadToCloud = async (buffer, filename) => {
+      return uploadBuffer(buffer, {
+        folder: 'miservicio/identity_docs', 
+        public_id: `provider_${mine.id}_${filename}_${Date.now()}`,
+        resource_type: 'image'
+      });
+    };
+
+    // Subir las 3 imágenes en paralelo
+    const [frontRes, backRes, selfieRes] = await Promise.all([
+      uploadToCloud(files.dni_front[0].buffer, 'dni_front'),
+      uploadToCloud(files.dni_back[0].buffer, 'dni_back'),
+      uploadToCloud(files.selfie[0].buffer, 'selfie')
+    ]);
+
+    // Actualizar proveedor
+    await svc.updateMine(userId, {
+      identity_status: 'pending', // Pasa a pendiente de revisión
+      identity_dni_front_url: frontRes.secure_url,
+      identity_dni_back_url: backRes.secure_url,
+      identity_selfie_url: selfieRes.secure_url,
+      identity_rejection_reason: null // Limpiar rechazos previos
+    });
+
+    res.json({ message: 'Documentos subidos. Esperando verificación.' });
+  } catch (e) {
+    next(e);
+  }
+}
+
+// Acción de Admin para aprobar/rechazar
+async function adminReviewIdentity(req, res, next) {
+  try {
+    // TODO: Validar que req.user.role === 'admin'
+    // if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+
+    const providerId = Number(req.params.id);
+    const { status, rejection_reason } = req.body; // status: 'verified' | 'rejected'
+
+    if (!['verified', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: { code: 'PROVIDER.INVALID_STATUS', message: 'Estado inválido' } });
+    }
+
+    const provider = await svc.getById(providerId);
+    if (!provider) return res.status(404).json({ error: { code: 'PROVIDER.NOT_FOUND', message: 'Proveedor no encontrado' } });
+
+    await provider.update({
+      identity_status: status,
+      identity_rejection_reason: status === 'rejected' ? rejection_reason : null
+    });
+
+    res.json({ provider });
+  } catch (e) {
+    next(e);
+  }
+}
+
+// Listado para Admin (sin filtro de status activo forzado)
+async function listForAdmin(req, res, next) {
+  try {
+    // TODO: Validar que req.user.role === 'admin'
+    // if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+
+    const { identityStatus, limit, offset } = req.query;
+    
+    const r = await svc.list({
+      identityStatus, // Pasamos el filtro
+      limit,
+      offset,
+      // No forzamos status: 'active' para que puedas ver a todos
+    });
+    res.json({ count: r.count, items: r.rows });
+  } catch (e) { 
+    next(e); 
+  }
+}
+
 module.exports = {
   getById,
   getMine,
@@ -253,5 +348,8 @@ module.exports = {
   getMyAvailability,
   updateMyAvailability,
   providerSummary,
-  providerUserIds
+  providerUserIds,
+  uploadIdentityDocs,
+  adminReviewIdentity,
+  listForAdmin
 };

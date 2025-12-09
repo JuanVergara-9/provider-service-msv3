@@ -23,7 +23,15 @@ module.exports = (sequelize, DataTypes) => {
     business_hours: DataTypes.JSONB,
     avatar_url: DataTypes.STRING(512),
     avatar_public_id: DataTypes.STRING(256),
-    avatar_version: DataTypes.STRING(64)
+    avatar_version: DataTypes.STRING(64),
+    identity_status: { 
+      type: DataTypes.ENUM('not_submitted', 'pending', 'verified', 'rejected'),
+      defaultValue: 'not_submitted' 
+    },
+    identity_dni_front_url: DataTypes.STRING(512),
+    identity_dni_back_url: DataTypes.STRING(512),
+    identity_selfie_url: DataTypes.STRING(512),
+    identity_rejection_reason: DataTypes.STRING
   }, { tableName: 'providers', underscored: true });
 
   Provider.associate = (models) => {
