@@ -135,6 +135,7 @@ async function list(params = {}) {
   if (params.city) where.city = params.city;
   if (params.status) where.status = params.status;
   if (params.isLicensed === true) where.is_licensed = true;
+  if (params.identityStatus) where.identity_status = params.identityStatus;
 
   if (params.categorySlug) {
     // Use OR condition to match either primary category or any of many-to-many categories

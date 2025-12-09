@@ -25,6 +25,16 @@ const uploadImage = multer({
   }
 });
 
-module.exports = { uploadImage };
+// Versión para múltiples archivos (para identidad)
+const uploadImageMultiple = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB por archivo
+    files: 10 // Permitir hasta 10 archivos
+  }
+});
+
+module.exports = { uploadImage, uploadImageMultiple };
 
 

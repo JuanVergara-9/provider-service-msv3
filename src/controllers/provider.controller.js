@@ -254,6 +254,88 @@ async function checkIsProvider(req, res, next) {
   }
 }
 
+async function uploadIdentityDocs(req, res, next) {
+  try {
+    const userId = Number(req.user?.userId);
+    if (!userId || isNaN(userId)) {
+      return res.status(401).json({ error: { code: 'PROVIDER.UNAUTHORIZED', message: 'No autorizado: userId inválido' } });
+    }
+
+    const files = req.files || {};
+    
+    if (!files.dni_front || !files.dni_back || !files.selfie) {
+      return res.status(400).json({ error: { code: 'PROVIDER.MISSING_FILES', message: 'Faltan documentos (Frente, Dorso o Selfie)' } });
+    }
+
+    const mine = await svc.getMine(userId);
+    if (!mine) return res.status(404).json({ error: { code: 'PROVIDER.NOT_FOUND', message: 'Aún no tienes perfil de proveedor' } });
+
+    const uploadToCloud = async (buffer, filename) => {
+      return uploadBuffer(buffer, {
+        folder: 'miservicio/identity_docs', 
+        public_id: `provider_${mine.id}_${filename}_${Date.now()}`,
+        resource_type: 'image'
+      });
+    };
+
+    const [frontRes, backRes, selfieRes] = await Promise.all([
+      uploadToCloud(files.dni_front[0].buffer, 'dni_front'),
+      uploadToCloud(files.dni_back[0].buffer, 'dni_back'),
+      uploadToCloud(files.selfie[0].buffer, 'selfie')
+    ]);
+
+    await svc.updateMine(userId, {
+      identity_status: 'pending',
+      identity_dni_front_url: frontRes.secure_url,
+      identity_dni_back_url: backRes.secure_url,
+      identity_selfie_url: selfieRes.secure_url,
+      identity_rejection_reason: null
+    });
+
+    res.json({ message: 'Documentos subidos. Esperando verificación.' });
+  } catch (e) {
+    next(e);
+  }
+}
+
+async function adminReviewIdentity(req, res, next) {
+  try {
+    const providerId = Number(req.params.id);
+    const { status, rejection_reason } = req.body;
+
+    if (!['verified', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: { code: 'PROVIDER.INVALID_STATUS', message: 'Estado inválido' } });
+    }
+
+    const provider = await svc.getById(providerId);
+    if (!provider) return res.status(404).json({ error: { code: 'PROVIDER.NOT_FOUND', message: 'Proveedor no encontrado' } });
+
+    await provider.update({
+      identity_status: status,
+      identity_rejection_reason: status === 'rejected' ? rejection_reason : null
+    });
+
+    res.json({ provider });
+  } catch (e) {
+    next(e);
+  }
+}
+
+async function listForAdmin(req, res, next) {
+  try {
+    const { identityStatus, limit, offset } = req.query;
+    
+    const r = await svc.list({
+      identityStatus,
+      limit,
+      offset,
+    });
+    res.json({ count: r.count, items: r.rows });
+  } catch (e) { 
+    next(e); 
+  }
+}
+
 module.exports = {
   getById,
   getMine,
@@ -267,5 +349,8 @@ module.exports = {
   updateMyAvailability,
   providerSummary,
   providerUserIds,
-  checkIsProvider
+  checkIsProvider,
+  uploadIdentityDocs,
+  adminReviewIdentity,
+  listForAdmin
 };
