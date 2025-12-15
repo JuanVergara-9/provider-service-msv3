@@ -2,6 +2,30 @@ const { z } = require('zod');
 const svc = require('../services/provider.service');
 const { uploadBuffer, destroy } = require('../utils/cloudinary');
 
+// Extrae el public_id de Cloudinary desde una URL (carpeta: miservicio/identity_docs)
+function getPublicIdFromUrl(url) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    const uploadIdx = parts.findIndex(p => p === 'upload');
+    if (uploadIdx === -1) return null;
+
+    // Descartar transformaciones y versión; quedarnos con la ruta del recurso
+    const afterUpload = parts.slice(uploadIdx + 1);
+    const versionIdx = afterUpload.findIndex(p => /^v\d+$/.test(p));
+    const pathParts = versionIdx >= 0 ? afterUpload.slice(versionIdx + 1) : afterUpload;
+    const lastPart = pathParts.pop();
+    if (!lastPart) return null;
+    const withoutExt = lastPart.split('.').slice(0, -1).join('.') || lastPart.split('.')[0];
+    const publicId = [...pathParts, withoutExt].join('/');
+    return publicId || null;
+  } catch (err) {
+    console.error('[getPublicIdFromUrl] Invalid URL:', url, err);
+    return null;
+  }
+}
+
 const createSchema = z.object({
   category_id: z.number().int().optional(), // legacy
   category_ids: z.array(z.number().int()).min(1).optional(), // new many-to-many
@@ -310,10 +334,33 @@ async function adminReviewIdentity(req, res, next) {
     const provider = await svc.getById(providerId);
     if (!provider) return res.status(404).json({ error: { code: 'PROVIDER.NOT_FOUND', message: 'Proveedor no encontrado' } });
 
-    await provider.update({
+    const updatePayload = {
       identity_status: status,
       identity_rejection_reason: status === 'rejected' ? rejection_reason : null
-    });
+    };
+
+    if (status === 'verified') {
+      const urls = [
+        provider.identity_dni_front_url,
+        provider.identity_dni_back_url,
+        provider.identity_selfie_url
+      ];
+
+      const publicIds = urls.map(getPublicIdFromUrl).filter(Boolean);
+      await Promise.all(publicIds.map(async (publicId) => {
+        try {
+          await destroy(publicId);
+        } catch (err) {
+          console.error(`[adminReviewIdentity] Error deleting ${publicId}:`, err);
+        }
+      }));
+
+      updatePayload.identity_dni_front_url = null;
+      updatePayload.identity_dni_back_url = null;
+      updatePayload.identity_selfie_url = null;
+    }
+
+    await provider.update(updatePayload);
 
     res.json({ provider });
   } catch (e) {
