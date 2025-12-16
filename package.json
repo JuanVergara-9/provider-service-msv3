@@ -5,9 +5,12 @@
     "db:migrate": "sequelize db:migrate",
     "db:migrate:undo": "sequelize db:migrate:undo",
     "db:seed": "sequelize db:seed:all",
-    "db:seed:undo": "sequelize db:seed:undo:all"
+    "db:seed:undo": "sequelize db:seed:undo:all",
+    "migrate:delivery-status": "node scripts/run-migration.js",
+    "clean:chat": "node scripts/clean-chat-history.js"
   },
   "dependencies": {
+    "axios": "^1.7.2",
     "cloudinary": "^2.7.0",
     "cors": "^2.8.5",
     "dayjs": "^1.11.18",
