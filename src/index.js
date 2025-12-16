@@ -8,13 +8,13 @@ try {
   }
   require('dotenv').config(); // .env tiene menor prioridad
   console.log('[provider-service] Environment variables loaded');
-  
+
   const express = require('express');
   const cors = require('cors');
   const helmet = require('helmet');
   const morgan = require('morgan');
   const { v4: uuidv4 } = require('uuid');
-  
+
   let sequelize;
   try {
     console.log('[provider-service] Loading models...');
@@ -44,8 +44,8 @@ try {
       return cb(null, origins.length === 0 || origins.includes(origin));
     },
     credentials: true,
-    methods: ['GET','POST','PUT','DELETE','OPTIONS'],
-    allowedHeaders: ['Content-Type','Authorization','x-request-id']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id']
   }));
 
   app.use(helmet());
@@ -53,7 +53,7 @@ try {
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // request-id para trazas
-  app.use((req,res,next) => {
+  app.use((req, res, next) => {
     req.id = req.headers['x-request-id'] || uuidv4();
     res.set('x-request-id', req.id);
     next();
@@ -62,22 +62,22 @@ try {
   app.use(morgan(':method :url :status - :response-time ms - :req[x-request-id]'));
 
   // timeouts prudentes
-  app.use((req,res,next) => {
+  app.use((req, res, next) => {
     req.setTimeout(30000);
     res.setTimeout(30000);
     next();
   });
 
   // Health / Readiness (dejé tus aliases)
-  app.get('/health', (_req,res) => res.json({ ok:true, service:'provider-service' }));
-  app.get('/ready',  async (_req,res) => {
-    try { await sequelize.authenticate(); return res.json({ ok:true }); }
-    catch { return res.status(503).json({ ok:false }); }
+  app.get('/health', (_req, res) => res.json({ ok: true, service: 'provider-service' }));
+  app.get('/ready', async (_req, res) => {
+    try { await sequelize.authenticate(); return res.json({ ok: true }); }
+    catch { return res.status(503).json({ ok: false }); }
   });
-  app.get('/healthz', (_req,res) => res.json({ ok:true, service:'provider-service' }));
-  app.get('/readyz',  async (_req,res) => {
-    try { await sequelize.authenticate(); return res.json({ ok:true }); }
-    catch { return res.status(503).json({ ok:false }); }
+  app.get('/healthz', (_req, res) => res.json({ ok: true, service: 'provider-service' }));
+  app.get('/readyz', async (_req, res) => {
+    try { await sequelize.authenticate(); return res.json({ ok: true }); }
+    catch { return res.status(503).json({ ok: false }); }
   });
 
   // Rutas
@@ -85,6 +85,7 @@ try {
     console.log('[provider-service] Loading routes...');
     app.use('/api/v1/providers', require('./routes/provider.routes'));
     app.use('/api/v1/categories', require('./routes/category.routes'));
+    app.use('/api/v1/chat', require('./routes/chat.routes'));
     console.log('[provider-service] Routes loaded successfully');
   } catch (error) {
     console.error('[provider-service] Error loading routes:', error);
@@ -99,7 +100,13 @@ try {
   });
 
   // Bind 0.0.0.0 para Railway
-  app.listen(PORT, '0.0.0.0', () => {
+  const http = require('http');
+  const { initializeSocket } = require('./socket');
+
+  const server = http.createServer(app);
+  initializeSocket(server);
+
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`provider-service on :${PORT}`);
     console.log(`[provider-service] Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`[provider-service] Database URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
