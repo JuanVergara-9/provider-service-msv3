@@ -2,6 +2,26 @@ const { Provider, Category } = require('../../models');
 const { conflict, notFound } = require('../utils/httpError');
 const { Op, Sequelize } = require('sequelize');
 
+async function geocodeCity(city, province) {
+  if (!city) return null;
+  
+  try {
+    const geoUrl = process.env.GEOLOCATION_SERVICE_URL || process.env.GEO_SERVICE_URL || 'http://localhost:4003';
+    const url = new URL('/api/v1/geo/geocode', geoUrl);
+    url.searchParams.set('city', city);
+    if (province) url.searchParams.set('province', province);
+    
+    const response = await fetch(url.toString());
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    return { lat: data.lat, lng: data.lng };
+  } catch (error) {
+    console.warn('[geocodeCity] Error geocoding:', error.message);
+    return null;
+  }
+}
+
 async function getById(id) {
   const p = await Provider.findByPk(id, {
     include: [
@@ -44,10 +64,8 @@ async function getMine(userId) {
 
 async function createOrGetMine(userId, payload) {
   const existing = await getMine(userId);
-  if (existing) return existing; // idempotente
+  if (existing) return existing;
 
-  // valida existencia de categoría
-  // Accept either category_id (legacy) or category_ids (new)
   let categoryIds = [];
   if (Array.isArray(payload.category_ids) && payload.category_ids.length > 0) {
     categoryIds = payload.category_ids;
@@ -60,9 +78,23 @@ async function createOrGetMine(userId, payload) {
   const found = await Category.findAll({ where: { id: { [Op.in]: categoryIds } } });
   if (found.length !== categoryIds.length) throw notFound('CATEGORY.NOT_FOUND', 'Una o más categorías inexistentes');
 
+  let finalLat = payload.lat;
+  let finalLng = payload.lng;
+
+  if (!finalLat || !finalLng) {
+    if (payload.city) {
+      const coords = await geocodeCity(payload.city, payload.province);
+      if (coords) {
+        finalLat = coords.lat;
+        finalLng = coords.lng;
+        console.log('[createOrGetMine] Auto-geocoded city:', payload.city, '→', coords);
+      }
+    }
+  }
+
   const provider = await Provider.create({
     user_id: userId,
-    category_id: categoryIds[0], // keep primary for legacy filters
+    category_id: categoryIds[0],
     first_name: payload.first_name,
     last_name: payload.last_name,
     contact_email: payload.contact_email,
@@ -72,8 +104,8 @@ async function createOrGetMine(userId, payload) {
     province: payload.province,
     city: payload.city,
     address: payload.address,
-    lat: payload.lat,
-    lng: payload.lng,
+    lat: finalLat,
+    lng: finalLng,
     years_experience: payload.years_experience,
     price_hint: payload.price_hint,
     emergency_available: payload.emergency_available,
@@ -87,7 +119,18 @@ async function createOrGetMine(userId, payload) {
 async function updateMine(userId, payload) {
   const mine = await getMine(userId);
   if (!mine) throw notFound('PROVIDER.NOT_FOUND', 'Aún no tienes perfil de proveedor');
-  // Handle categories updates
+
+  const updatedPayload = { ...payload };
+
+  if (payload.city && (!payload.lat || !payload.lng)) {
+    const coords = await geocodeCity(payload.city, payload.province || mine.province);
+    if (coords) {
+      updatedPayload.lat = coords.lat;
+      updatedPayload.lng = coords.lng;
+      console.log('[updateMine] Auto-geocoded city:', payload.city, '→', coords);
+    }
+  }
+
   let categoryIds = null;
   if (Array.isArray(payload.category_ids)) {
     categoryIds = payload.category_ids;
@@ -97,11 +140,10 @@ async function updateMine(userId, payload) {
   if (categoryIds) {
     const found = await Category.findAll({ where: { id: { [Op.in]: categoryIds } } });
     if (found.length !== categoryIds.length) throw notFound('CATEGORY.NOT_FOUND', 'Una o más categorías inexistentes');
-    // keep first as primary
-    await mine.update({ ...payload, category_id: categoryIds[0] });
+    await mine.update({ ...updatedPayload, category_id: categoryIds[0] });
     await mine.setCategories(categoryIds);
   } else {
-    await mine.update(payload);
+    await mine.update(updatedPayload);
   }
   return getMine(userId);
 }
@@ -131,7 +173,6 @@ async function clearAvatar(userId) {
 async function list(params = {}) {
   const where = {};
   const include = [];
-  try { console.log('[list] params:', params); } catch (_e) { }
   if (params.city) where.city = params.city;
   if (params.status) where.status = params.status;
   if (params.isLicensed === true) where.is_licensed = true;
@@ -153,24 +194,36 @@ async function list(params = {}) {
   const query = { where, include, limit: Math.min(Number(params.limit || 20), 100), offset: Number(params.offset || 0), order: [['id', 'ASC']] };
 
   // Filtro por distancia (opcional)
-  const lat = parseFloat(params.lat), lng = parseFloat(params.lng), radius = Math.min(parseFloat(params.radiusKm || 0) || 0, 50);
+  const lat = parseFloat(params.lat), lng = parseFloat(params.lng), radius = Math.min(parseFloat(params.radiusKm || 0) || 0, 200);
   if (!Number.isNaN(lat) && !Number.isNaN(lng) && radius > 0) {
-    // bounding box rápido
     const R = 6371;
     const latDelta = (radius / R) * (180 / Math.PI);
     const lngDelta = (radius / R) * (180 / Math.PI) / Math.cos(lat * Math.PI / 180);
-    where.lat = { [Op.between]: [lat - latDelta, lat + latDelta] };
-    where.lng = { [Op.between]: [lng - lngDelta, lng + lngDelta] };
+    
+    where[Op.or] = [
+      {
+        lat: { [Op.between]: [lat - latDelta, lat + latDelta] },
+        lng: { [Op.between]: [lng - lngDelta, lng + lngDelta] }
+      },
+      {
+        [Op.or]: [
+          { lat: null },
+          { lng: null }
+        ]
+      }
+    ];
 
-    // distancia exacta para ordenar
     query.attributes = {
       include: [
         [Sequelize.literal(`
-          ${R} * acos(
-            cos(radians(${lat})) * cos(radians(CAST(lat AS DOUBLE PRECISION))) *
-            cos(radians(CAST(lng AS DOUBLE PRECISION)) - radians(${lng})) +
-            sin(radians(${lat})) * sin(radians(CAST(lat AS DOUBLE PRECISION)))
-          )
+          CASE 
+            WHEN lat IS NULL OR lng IS NULL THEN NULL
+            ELSE ${R} * acos(
+              cos(radians(${lat})) * cos(radians(CAST(lat AS DOUBLE PRECISION))) *
+              cos(radians(CAST(lng AS DOUBLE PRECISION)) - radians(${lng})) +
+              sin(radians(${lat})) * sin(radians(CAST(lat AS DOUBLE PRECISION)))
+            )
+          END
         `), 'distance_km']
       ]
     };
