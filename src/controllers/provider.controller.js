@@ -241,6 +241,19 @@ async function providerUserIds(req, res, next) {
   }
 }
 
+async function checkIsProvider(req, res, next) {
+  try {
+    const userId = Number(req.params.userId);
+    if (!userId || isNaN(userId)) {
+      return res.status(400).json({ isProvider: false, error: 'Invalid userId' });
+    }
+    const p = await svc.getMine(userId);
+    res.json({ isProvider: !!p });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getById,
   getMine,
@@ -253,5 +266,6 @@ module.exports = {
   getMyAvailability,
   updateMyAvailability,
   providerSummary,
-  providerUserIds
+  providerUserIds,
+  checkIsProvider
 };

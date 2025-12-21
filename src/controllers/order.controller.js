@@ -1,0 +1,162 @@
+const orderService = require('../services/order.service');
+
+class OrderController {
+    /**
+     * GET /orders/public/recent - Public endpoint (no auth needed)
+     * Returns recent anonymized orders for the social proof feed.
+     */
+    async getPublicRecent(req, res) {
+        try {
+            const limit = parseInt(req.query.limit) || 5;
+            const orders = await orderService.getPublicRecentOrders(limit);
+            res.json({ orders });
+        } catch (error) {
+            console.error('Error fetching public recent orders:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    /**
+     * GET /orders/stats - Public endpoint (no auth needed)
+     * Returns public statistics (resolved orders this month, etc).
+     */
+    async getStats(req, res) {
+        try {
+            const stats = await orderService.getStats();
+            res.json(stats);
+        } catch (error) {
+            console.error('Error fetching order stats:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    async create(req, res) {
+        try {
+            const { title, description, category_id, lat, lng, images, budget_estimate } = req.body;
+            const user_id = req.user?.id; // Suponiendo que el middleware de auth inyecta el user
+
+            if (!lat || !lng) {
+                return res.status(400).json({ error: 'Exact location (lat, lng) is required.' });
+            }
+
+            const order = await orderService.createOrder({
+                user_id,
+                category_id,
+                title,
+                description,
+                lat,
+                lng,
+                images,
+                budget_estimate
+            });
+
+            res.status(201).json(order);
+        } catch (error) {
+            console.error('Error creating order:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    async getFeed(req, res) {
+        try {
+            const provider = req.provider; // Suponiendo middleware que identifica al proveedor
+            if (!provider) {
+                return res.status(403).json({ error: 'Only providers can access the job feed.' });
+            }
+
+            const jobs = await orderService.getAvailableJobs(provider);
+            res.json(jobs);
+        } catch (error) {
+            console.error('Error fetching jobs feed:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    async getById(req, res) {
+        try {
+            const order = await orderService.getOrderById(req.params.id);
+            if (!order) return res.status(404).json({ error: 'Order not found' });
+            res.json(order);
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    async postulate(req, res) {
+        try {
+            const { id } = req.params;
+            const { message, budget } = req.body;
+            const provider = req.provider;
+
+            if (!provider) {
+                return res.status(403).json({ error: 'Only registered providers can postulate to jobs.' });
+            }
+
+            const { Postulation, Order: OrderModel } = require('../../models');
+
+            // 1. Validar límite de 3 postulaciones activas (SENT)
+            const activePostulationsCount = await Postulation.count({
+                where: { provider_id: provider.id, status: 'SENT' }
+            });
+
+            if (activePostulationsCount >= 3) {
+                return res.status(403).json({
+                    error: 'Limit reached.',
+                    message: 'Ya tenés 3 postulaciones activas. Debes esperar a que los clientes respondan o que los pedidos expiren.'
+                });
+            }
+
+            // 2. Validar si ya postuló a ESTE pedido específico
+            const existing = await Postulation.findOne({
+                where: { order_id: id, provider_id: provider.id }
+            });
+
+            if (existing) {
+                return res.status(400).json({ error: 'You have already postulated to this job.' });
+            }
+
+            const postulation = await Postulation.create({
+                order_id: id,
+                provider_id: provider.id,
+                message,
+                budget,
+                status: 'SENT'
+            });
+
+            // Actualizar estado del pedido si es necesario
+            await OrderModel.update({ status: 'MATCHED' }, { where: { id, status: 'PENDING' } });
+
+            res.status(201).json(postulation);
+        } catch (error) {
+            console.error('Error in postulation:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    async acceptPostulation(req, res) {
+        try {
+            const { id: orderId } = req.params;
+            const { postulation_id } = req.body;
+            const clientId = req.user.id;
+
+            const result = await orderService.acceptPostulation(orderId, postulation_id, clientId);
+            res.json(result);
+        } catch (error) {
+            console.error('Error accepting postulation:', error);
+            res.status(400).json({ error: error.message });
+        }
+    }
+
+    async getMine(req, res) {
+        try {
+            const userId = req.user.id;
+            const orders = await orderService.getClientOrders(userId);
+            res.json(orders);
+        } catch (error) {
+            console.error('Error fetching client orders:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+}
+
+module.exports = new OrderController();
