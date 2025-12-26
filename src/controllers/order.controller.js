@@ -33,7 +33,11 @@ class OrderController {
     async create(req, res) {
         try {
             const { title, description, category_id, lat, lng, images, budget_estimate } = req.body;
-            const user_id = req.user?.id; // Suponiendo que el middleware de auth inyecta el user
+            const user_id = req.user?.userId;
+
+            if (!user_id) {
+                return res.status(401).json({ error: 'Unauthorized: user ID missing' });
+            }
 
             if (!lat || !lng) {
                 return res.status(400).json({ error: 'Exact location (lat, lng) is required.' });
@@ -50,7 +54,7 @@ class OrderController {
                 budget_estimate
             });
 
-            res.status(201).json(order);
+            res.status(201).json({ order });
         } catch (error) {
             console.error('Error creating order:', error);
             res.status(500).json({ error: 'Internal server error' });
@@ -137,7 +141,11 @@ class OrderController {
         try {
             const { id: orderId } = req.params;
             const { postulation_id } = req.body;
-            const clientId = req.user.id;
+            const clientId = req.user?.userId;
+
+            if (!clientId) {
+                return res.status(401).json({ error: 'Unauthorized: user ID missing' });
+            }
 
             const result = await orderService.acceptPostulation(orderId, postulation_id, clientId);
             res.json(result);
@@ -149,12 +157,61 @@ class OrderController {
 
     async getMine(req, res) {
         try {
-            const userId = req.user.id;
+            const userId = req.user?.userId;
+            
+            if (!userId) {
+                return res.status(401).json({ error: 'Unauthorized: user ID missing' });
+            }
+
             const orders = await orderService.getClientOrders(userId);
-            res.json(orders);
+            res.json({ orders });
         } catch (error) {
             console.error('Error fetching client orders:', error);
             res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    async uploadImage(req, res) {
+        try {
+            if (!req.file) {
+                return res.status(400).json({ error: 'No image file provided' });
+            }
+
+            const { uploadBuffer } = require('../utils/cloudinary');
+            const folder = process.env.CLOUDINARY_FOLDER || 'miservicio/orders';
+
+            const result = await uploadBuffer(req.file.buffer, {
+                folder,
+                transformation: [
+                    { width: 1200, height: 1200, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }
+                ]
+            });
+
+            res.json({
+                url: result.secure_url,
+                public_id: result.public_id
+            });
+        } catch (error) {
+            console.error('Error uploading order image:', error);
+            res.status(500).json({ error: 'Failed to upload image' });
+        }
+    }
+
+    async deleteImage(req, res) {
+        try {
+            const { public_id } = req.body;
+
+            if (!public_id) {
+                return res.status(400).json({ error: 'public_id is required' });
+            }
+
+            const { destroy } = require('../utils/cloudinary');
+            await destroy(public_id);
+
+            res.json({ success: true });
+        } catch (error) {
+            console.error('Error deleting image:', error);
+            res.status(500).json({ error: 'Failed to delete image' });
         }
     }
 }
