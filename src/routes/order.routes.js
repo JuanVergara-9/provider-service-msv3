@@ -2,6 +2,7 @@ const router = require('express').Router();
 const ctrl = require('../controllers/order.controller');
 const { requireAuth } = require('../middlewares/auth.middleware');
 const { injectProvider } = require('../middlewares/provider.middleware');
+const { uploadImage } = require('../middlewares/upload.middleware');
 
 // ========== PUBLIC ROUTES (No auth required) ==========
 // Recent public orders for social proof feed
@@ -10,6 +11,11 @@ router.get('/public/recent', ctrl.getPublicRecent);
 router.get('/stats', ctrl.getStats);
 
 // ========== PROTECTED ROUTES (Auth required) ==========
+// Upload image for order (before creating order)
+router.post('/upload-image', requireAuth, uploadImage.single('image'), ctrl.uploadImage);
+// Delete image from Cloudinary
+router.post('/delete-image', requireAuth, ctrl.deleteImage);
+
 // Publicar un nuevo pedido (solo autenticados)
 router.post('/', requireAuth, ctrl.create);
 
