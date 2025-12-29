@@ -296,35 +296,27 @@ const ChatController = {
             const provider = await Provider.findOne({ where: { user_id: userId } });
             const providerId = provider ? provider.id : null;
 
-            const conversationWhere = {
-                [Op.or]: [
-                    { clientId: userId },
-                    ...(providerId ? [{ providerId: providerId }] : [])
-                ]
+            const whereClause = {
+                senderId: { [Op.ne]: userId },
+                isRead: false
             };
 
-            const conversations = await Conversation.findAll({
-                where: conversationWhere,
-                attributes: ['id']
-            });
-
-            const conversationIds = conversations.map(conv => conv.id);
-
-            if (conversationIds.length === 0) {
-                return res.json({ count: 0 });
-            }
-
             const count = await Message.count({
-                where: {
-                    conversationId: { [Op.in]: conversationIds },
-                    senderId: { [Op.ne]: userId },
-                    isRead: false
-                }
+                where: whereClause,
+                include: [{
+                    model: Conversation,
+                    required: true,
+                    where: {
+                        [Op.or]: [
+                            { clientId: userId },
+                            ...(providerId ? [{ providerId: providerId }] : [])
+                        ]
+                    }
+                }]
             });
 
             return res.json({ count });
         } catch (error) {
-            console.error('Error in getUnreadCount:', error);
             next(error);
         }
     },
