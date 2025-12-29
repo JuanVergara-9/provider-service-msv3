@@ -13,8 +13,8 @@ module.exports = (sequelize, DataTypes) => {
     province: DataTypes.STRING(80),
     city: DataTypes.STRING(80),
     address: DataTypes.STRING(160),
-    lat: DataTypes.DECIMAL(10,7),
-    lng: DataTypes.DECIMAL(10,7),
+    lat: DataTypes.DECIMAL(10, 7),
+    lng: DataTypes.DECIMAL(10, 7),
     status: { type: DataTypes.STRING(16), defaultValue: 'active' },
     years_experience: DataTypes.SMALLINT,
     price_hint: DataTypes.INTEGER,
@@ -43,6 +43,12 @@ module.exports = (sequelize, DataTypes) => {
       through: 'provider_categories',
       foreignKey: 'provider_id',
       otherKey: 'category_id'
+    });
+
+    // Association with Conversations
+    Provider.hasMany(models.Conversation, {
+      as: 'conversations',
+      foreignKey: 'providerId'
     });
   };
 

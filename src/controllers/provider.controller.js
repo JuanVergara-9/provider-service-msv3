@@ -265,7 +265,19 @@ async function providerUserIds(req, res, next) {
   }
 }
 
-// Subida de documentos de identidad
+async function checkIsProvider(req, res, next) {
+  try {
+    const userId = Number(req.params.userId);
+    if (!userId || isNaN(userId)) {
+      return res.status(400).json({ isProvider: false, error: 'Invalid userId' });
+    }
+    const p = await svc.getMine(userId);
+    res.json({ isProvider: !!p });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function uploadIdentityDocs(req, res, next) {
   try {
     const userId = Number(req.user?.userId);
@@ -282,7 +294,6 @@ async function uploadIdentityDocs(req, res, next) {
     const mine = await svc.getMine(userId);
     if (!mine) return res.status(404).json({ error: { code: 'PROVIDER.NOT_FOUND', message: 'Aún no tienes perfil de proveedor' } });
 
-    // Función auxiliar para subir a Cloudinary en una carpeta privada/admin
     const uploadToCloud = async (buffer, filename) => {
       return uploadBuffer(buffer, {
         folder: 'miservicio/identity_docs', 
@@ -291,20 +302,18 @@ async function uploadIdentityDocs(req, res, next) {
       });
     };
 
-    // Subir las 3 imágenes en paralelo
     const [frontRes, backRes, selfieRes] = await Promise.all([
       uploadToCloud(files.dni_front[0].buffer, 'dni_front'),
       uploadToCloud(files.dni_back[0].buffer, 'dni_back'),
       uploadToCloud(files.selfie[0].buffer, 'selfie')
     ]);
 
-    // Actualizar proveedor
     await svc.updateMine(userId, {
-      identity_status: 'pending', // Pasa a pendiente de revisión
+      identity_status: 'pending',
       identity_dni_front_url: frontRes.secure_url,
       identity_dni_back_url: backRes.secure_url,
       identity_selfie_url: selfieRes.secure_url,
-      identity_rejection_reason: null // Limpiar rechazos previos
+      identity_rejection_reason: null
     });
 
     res.json({ message: 'Documentos subidos. Esperando verificación.' });
@@ -313,14 +322,10 @@ async function uploadIdentityDocs(req, res, next) {
   }
 }
 
-// Acción de Admin para aprobar/rechazar
 async function adminReviewIdentity(req, res, next) {
   try {
-    // TODO: Validar que req.user.role === 'admin'
-    // if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-
     const providerId = Number(req.params.id);
-    const { status, rejection_reason } = req.body; // status: 'verified' | 'rejected'
+    const { status, rejection_reason } = req.body;
 
     if (!['verified', 'rejected'].includes(status)) {
       return res.status(400).json({ error: { code: 'PROVIDER.INVALID_STATUS', message: 'Estado inválido' } });
@@ -363,19 +368,14 @@ async function adminReviewIdentity(req, res, next) {
   }
 }
 
-// Listado para Admin (sin filtro de status activo forzado)
 async function listForAdmin(req, res, next) {
   try {
-    // TODO: Validar que req.user.role === 'admin'
-    // if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-
     const { identityStatus, limit, offset } = req.query;
     
     const r = await svc.list({
-      identityStatus, // Pasamos el filtro
+      identityStatus,
       limit,
       offset,
-      // No forzamos status: 'active' para que puedas ver a todos
     });
     res.json({ count: r.count, items: r.rows });
   } catch (e) { 
@@ -396,6 +396,7 @@ module.exports = {
   updateMyAvailability,
   providerSummary,
   providerUserIds,
+  checkIsProvider,
   uploadIdentityDocs,
   adminReviewIdentity,
   listForAdmin

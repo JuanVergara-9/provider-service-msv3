@@ -3,17 +3,16 @@ const ctrl = require('../controllers/provider.controller');
 const { requireAuth } = require('../middlewares/auth.middleware');
 const { uploadImage, uploadImageMultiple } = require('../middlewares/upload.middleware');
 
-router.get('/', ctrl.list); // público (listado con filtros)
-router.get('/stats/summary', ctrl.providerSummary); // Resumen de proveedores (total, activos)
-router.get('/user-ids', ctrl.providerUserIds); // Lista de user_ids de proveedores (para auth-service)
+router.get('/', ctrl.list);
+router.get('/stats/summary', ctrl.providerSummary);
+router.get('/user-ids', ctrl.providerUserIds);
+router.get('/check/:userId', ctrl.checkIsProvider);
 
-// Configuración de Multer para aceptar los 3 archivos de identidad
 const uploadIdentity = uploadImageMultiple.fields([
   { name: 'dni_front', maxCount: 1 },
   { name: 'dni_back', maxCount: 1 },
   { name: 'selfie', maxCount: 1 }
 ]);
-
 // Rutas específicas deben ir ANTES de rutas genéricas con parámetros
 router.get('/mine', requireAuth, ctrl.getMine); // alias para compatibilidad con el frontend
 router.post('/mine', requireAuth, ctrl.createMine);
