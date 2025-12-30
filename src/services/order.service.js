@@ -170,8 +170,8 @@ class OrderService {
     }
 
     async getClientOrders(userId) {
-        const { Postulation, Provider, Category } = require('../../models');
-        return await Order.findAll({
+        const { Postulation, Provider, Category, Conversation } = require('../../models');
+        const orders = await Order.findAll({
             where: { user_id: userId },
             include: [
                 { model: Category, as: 'category' },
@@ -183,6 +183,41 @@ class OrderService {
             ],
             order: [['created_at', 'DESC']]
         });
+
+        // Para cada orden, buscar si existen conversaciones asociadas a los proveedores postulados
+        const ordersWithConv = await Promise.all(orders.map(async (order) => {
+            const orderJson = order.toJSON();
+            if (orderJson.postulations) {
+                orderJson.postulations = await Promise.all(orderJson.postulations.map(async (p) => {
+                    // Primero buscar la conversación específica de este pedido
+                    let conv = await Conversation.findOne({
+                        where: {
+                            clientId: userId,
+                            providerId: p.provider_id,
+                            serviceId: order.id
+                        },
+                        attributes: ['id']
+                    });
+
+                    // Si no existe, buscar cualquier conversación previa entre ellos
+                    if (!conv) {
+                        conv = await Conversation.findOne({
+                            where: {
+                                clientId: userId,
+                                providerId: p.provider_id
+                            },
+                            attributes: ['id'],
+                            order: [['updatedAt', 'DESC']]
+                        });
+                    }
+                    
+                    return { ...p, conversationId: conv ? conv.id : null };
+                }));
+            }
+            return orderJson;
+        }));
+
+        return ordersWithConv;
     }
 
     async acceptPostulation(orderId, postulationId, clientId) {
@@ -227,14 +262,14 @@ class OrderService {
         // 5. Crear o buscar conversación entre cliente y profesional
         let [conversation] = await Conversation.findOrCreate({
             where: {
-                client_id: clientId,
-                provider_id: winnerPostulation.provider_id,
-                service_id: orderId // Opcional: asociar a este pedido específico
+                clientId: clientId,
+                providerId: winnerPostulation.provider_id,
+                serviceId: orderId // Asociar a este pedido específico
             },
             defaults: {
-                client_id: clientId,
-                provider_id: winnerPostulation.provider_id,
-                service_id: orderId
+                clientId: clientId,
+                providerId: winnerPostulation.provider_id,
+                serviceId: orderId
             }
         });
 

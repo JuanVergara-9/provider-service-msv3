@@ -47,9 +47,9 @@ const ChatController = {
 
             let conversation = await Conversation.findOne({
                 where: {
-                    client_id: clientId,
-                    provider_id: providerId,
-                    ...(serviceId ? { service_id: serviceId } : {})
+                    clientId: clientId,
+                    providerId: providerId,
+                    ...(serviceId ? { serviceId: serviceId } : {})
                 }
             });
 
@@ -186,7 +186,7 @@ const ChatController = {
             if (provider) {
                 isProvider = true;
                 conversations = await Conversation.findAll({
-                    where: { provider_id: provider.id },
+                    where: { providerId: provider.id },
                     include: [
                         {
                             model: Message,
@@ -200,7 +200,7 @@ const ChatController = {
                 });
             } else {
                 conversations = await Conversation.findAll({
-                    where: { client_id: userId },
+                    where: { clientId: userId },
                     include: [
                         {
                             model: Message,
