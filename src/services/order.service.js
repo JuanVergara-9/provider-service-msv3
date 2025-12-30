@@ -186,6 +186,9 @@ class OrderService {
     }
 
     async acceptPostulation(orderId, postulationId, clientId) {
+        const { Postulation, Provider, Category, Conversation, Message } = require('../../models');
+        const { getIo } = require('../socket');
+
         // 1. Validar que la orden pertenezca al cliente
         const order = await Order.findByPk(orderId);
         if (!order) throw new Error('Order not found');
@@ -194,7 +197,9 @@ class OrderService {
             throw new Error('Order is not in a valid state to be accepted');
         }
 
-        const winnerPostulation = await Postulation.findByPk(postulationId);
+        const winnerPostulation = await Postulation.findByPk(postulationId, {
+            include: [{ model: Provider, as: 'provider' }]
+        });
         if (!winnerPostulation || winnerPostulation.order_id !== parseInt(orderId)) {
             throw new Error('Invalid postulation');
         }
@@ -219,7 +224,42 @@ class OrderService {
             }
         );
 
-        return { success: true, order };
+        // 5. Crear o buscar conversación entre cliente y profesional
+        let [conversation] = await Conversation.findOrCreate({
+            where: {
+                client_id: clientId,
+                provider_id: winnerPostulation.provider_id,
+                service_id: orderId // Opcional: asociar a este pedido específico
+            },
+            defaults: {
+                client_id: clientId,
+                provider_id: winnerPostulation.provider_id,
+                service_id: orderId
+            }
+        });
+
+        // 6. Enviar mensaje automático de sistema
+        const systemMessage = await Message.create({
+            conversationId: conversation.id,
+            senderId: clientId, // El mensaje aparece como si lo iniciara el cliente o sistema
+            content: `¡Hola! He aceptado tu postulación para el pedido: "${order.title}". Hablemos por aquí para coordinar los detalles.`,
+            isRead: false,
+            deliveryStatus: 'sent'
+        });
+
+        // 7. Notificar al proveedor vía Socket (si está conectado)
+        const io = getIo();
+        if (io && winnerPostulation.provider) {
+            const providerUserId = winnerPostulation.provider.user_id;
+            io.to(`user_${providerUserId}`).emit('postulation_accepted', {
+                orderId: order.id,
+                orderTitle: order.title,
+                conversationId: conversation.id,
+                message: systemMessage
+            });
+        }
+
+        return { success: true, order, conversationId: conversation.id };
     }
 }
 
