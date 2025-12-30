@@ -11,12 +11,15 @@ module.exports = {
             END $$;
         `);
 
-        // Agregar la columna delivery_status
-        await queryInterface.addColumn('messages', 'delivery_status', {
-            type: Sequelize.ENUM('pending', 'sent', 'delivered', 'read'),
-            defaultValue: 'sent',
-            allowNull: false
-        });
+        // Agregar la columna delivery_status si no existe
+        const tableInfo = await queryInterface.describeTable('messages');
+        if (!tableInfo.delivery_status) {
+            await queryInterface.addColumn('messages', 'delivery_status', {
+                type: Sequelize.ENUM('pending', 'sent', 'delivered', 'read'),
+                defaultValue: 'sent',
+                allowNull: false
+            });
+        }
 
         // Actualizar mensajes existentes
         await queryInterface.sequelize.query(`
