@@ -223,10 +223,19 @@ class OrderService {
         const orderIdNum = Number(orderId);
         const { getIo } = require('../socket');
 
-        // 1. Validar que la orden pertenezca al cliente
+        // 1. Validar que la orden exista
         const order = await Order.findByPk(orderIdNum);
         if (!order) throw new Error('Order not found');
         if (order.user_id !== clientId) throw new Error('Unauthorized');
+
+        // Idempotencia: Si ya está aceptada y el ganador es el mismo, devolver éxito silencioso
+        if (order.status === 'IN_PROGRESS' && order.winner_provider_id) {
+            const existingConv = await Conversation.findOne({
+                where: { clientId, providerId: order.winner_provider_id, serviceId: orderIdNum }
+            });
+            return { success: true, order, conversationId: existingConv?.id };
+        }
+
         if (order.status !== 'PENDING' && order.status !== 'MATCHED') {
             throw new Error('Order is not in a valid state to be accepted');
         }
