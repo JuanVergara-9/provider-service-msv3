@@ -19,7 +19,7 @@ function requireAuth(req, _res, next) {
       return next(unauthorized('AUTH.INVALID_USER_ID', 'ID de usuario inválido en el token'));
     }
     
-    req.user = { userId: Number(payload.userId), role: payload.role };
+    req.user = { id: Number(payload.userId), userId: Number(payload.userId), role: payload.role };
     return next();
   } catch (e) {
     if (process.env.NODE_ENV !== 'production') {

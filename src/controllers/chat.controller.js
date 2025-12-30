@@ -1,6 +1,6 @@
 const { z } = require('zod');
 const { Conversation, Message, Provider, Sequelize } = require('../../models');
-const { Op } = Sequelize;
+const { Op } = require('sequelize');
 const { getIo } = require('../socket');
 
 // --- Zod Schemas ---
