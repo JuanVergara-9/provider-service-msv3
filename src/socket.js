@@ -1,5 +1,5 @@
 const { Server } = require('socket.io');
-const jwt = require('jsonwebtoken');
+const { verifyAccessToken } = require('./utils/jwt');
 const { Message, Conversation, Provider } = require('../models');
 
 let io;
@@ -29,10 +29,11 @@ const initializeSocket = (httpServer) => {
         }
 
         try {
-            const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-            socket.user = decoded; // { userId, role, ... }
+            const decoded = verifyAccessToken(token);
+            socket.user = decoded; // { userId, role, isProvider }
             next();
         } catch (err) {
+            console.error('[socket auth] Invalid token:', err.message);
             return next(new Error('Authentication error: Invalid token'));
         }
     });
