@@ -220,11 +220,11 @@ class OrderService {
     }
 
     async acceptPostulation(orderId, postulationId, clientId) {
-        const { Postulation, Provider, Category, Conversation, Message } = require('../../models');
+        const orderIdNum = Number(orderId);
         const { getIo } = require('../socket');
 
         // 1. Validar que la orden pertenezca al cliente
-        const order = await Order.findByPk(orderId);
+        const order = await Order.findByPk(orderIdNum);
         if (!order) throw new Error('Order not found');
         if (order.user_id !== clientId) throw new Error('Unauthorized');
         if (order.status !== 'PENDING' && order.status !== 'MATCHED') {
@@ -234,7 +234,7 @@ class OrderService {
         const winnerPostulation = await Postulation.findByPk(postulationId, {
             include: [{ model: Provider, as: 'provider' }]
         });
-        if (!winnerPostulation || winnerPostulation.order_id !== parseInt(orderId)) {
+        if (!winnerPostulation || winnerPostulation.order_id !== orderIdNum) {
             throw new Error('Invalid postulation');
         }
 
@@ -252,7 +252,7 @@ class OrderService {
             { status: 'REJECTED' },
             {
                 where: {
-                    order_id: orderId,
+                    order_id: orderIdNum,
                     id: { [Sequelize.Op.ne]: postulationId }
                 }
             }
@@ -263,12 +263,12 @@ class OrderService {
             where: {
                 clientId: clientId,
                 providerId: winnerPostulation.provider_id,
-                serviceId: orderId // Asociar a este pedido específico
+                serviceId: orderIdNum // Asociar a este pedido específico
             },
             defaults: {
                 clientId: clientId,
                 providerId: winnerPostulation.provider_id,
-                serviceId: orderId
+                serviceId: orderIdNum
             }
         });
 

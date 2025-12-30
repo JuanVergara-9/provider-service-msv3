@@ -290,37 +290,47 @@ const ChatController = {
 
     async getUnreadCount(req, res, next) {
         try {
-            const userId = req.user.userId;
+            const userId = Number(req.user.userId);
+            if (isNaN(userId)) return res.json({ count: 0 });
 
             const provider = await Provider.findOne({ where: { user_id: userId } });
             const providerId = provider ? provider.id : null;
 
-            const whereClause = {
-                senderId: { [Op.ne]: userId },
-                isRead: false
-            };
+            console.log(`[getUnreadCount] User: ${userId}, Provider: ${providerId}`);
 
+            // Buscar todas las conversaciones donde participa el usuario
+            const userConversations = await Conversation.findAll({
+                where: {
+                    [Sequelize.Op.or]: [
+                        { clientId: userId },
+                        ...(providerId ? [{ providerId: providerId }] : [])
+                    ]
+                },
+                attributes: ['id'],
+                raw: true
+            });
+
+            const conversationIds = userConversations.map(c => c.id);
+            console.log(`[getUnreadCount] Found ${conversationIds.length} conversations:`, conversationIds);
+
+            if (conversationIds.length === 0) {
+                return res.json({ count: 0 });
+            }
+
+            // Contar mensajes no leídos en esas conversaciones que no hayan sido enviados por el usuario
             const count = await Message.count({
                 where: {
+                    conversationId: { [Sequelize.Op.in]: conversationIds },
                     senderId: { [Sequelize.Op.ne]: userId },
                     isRead: false
-                },
-                include: [{
-                    model: Conversation,
-                    as: 'conversation',
-                    required: true,
-                    where: {
-                        [Sequelize.Op.or]: [
-                            { clientId: userId },
-                            ...(providerId ? [{ providerId: providerId }] : [])
-                        ]
-                    }
-                }]
+                }
             });
 
             return res.json({ count });
         } catch (error) {
-            next(error);
+            console.error('[getUnreadCount] Fatal error:', error);
+            // No enviar 500 para no romper el frontend, devolver 0 y loguear
+            return res.json({ count: 0, error: error.message });
         }
     },
 
