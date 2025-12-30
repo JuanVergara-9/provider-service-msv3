@@ -1,6 +1,5 @@
 const { z } = require('zod');
 const { Conversation, Message, Provider, Sequelize } = require('../../models');
-const { Op } = require('sequelize');
 const { getIo } = require('../socket');
 
 // --- Zod Schemas ---
@@ -262,7 +261,7 @@ const ChatController = {
                 const unreadCount = await Message.count({
                     where: {
                         conversationId: convData.id,
-                        senderId: { [Op.ne]: userId },
+                        senderId: { [Sequelize.Op.ne]: userId },
                         isRead: false
                     }
                 });
@@ -302,12 +301,16 @@ const ChatController = {
             };
 
             const count = await Message.count({
-                where: whereClause,
+                where: {
+                    senderId: { [Sequelize.Op.ne]: userId },
+                    isRead: false
+                },
                 include: [{
                     model: Conversation,
+                    as: 'conversation',
                     required: true,
                     where: {
-                        [Op.or]: [
+                        [Sequelize.Op.or]: [
                             { clientId: userId },
                             ...(providerId ? [{ providerId: providerId }] : [])
                         ]
@@ -354,12 +357,12 @@ const ChatController = {
             const result = await Message.update(
                 { 
                     isRead: true,
-                    deliveryStatus: 'read' // Actualizar estado de entrega a 'read'
+                    deliveryStatus: 'read'
                 },
                 {
                     where: {
                         conversationId: conversationId,
-                        senderId: { [Op.ne]: userId },
+                        senderId: { [Sequelize.Op.ne]: userId },
                         isRead: false
                     }
                 }

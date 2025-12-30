@@ -1,5 +1,4 @@
-const { Order, Provider, Category, Postulation } = require('../../models');
-const { Op } = require('sequelize');
+const { Order, Provider, Category, Postulation, Conversation, Message, Sequelize } = require('../../models');
 const { appEmitter, EVENTS } = require('../utils/events');
 const { getDistanceKm } = require('../utils/geo');
 
@@ -102,7 +101,7 @@ class OrderService {
                 category_id: provider.category_id,
                 status: 'PENDING',
                 created_at: {
-                    [Op.gt]: expirationLimit
+                    [Sequelize.Op.gt]: expirationLimit
                 }
             },
             order: [['created_at', 'DESC']]
@@ -128,8 +127,8 @@ class OrderService {
 
         const orders = await Order.findAll({
             where: {
-                status: { [Op.in]: ['PENDING', 'MATCHED', 'IN_PROGRESS', 'COMPLETED'] },
-                created_at: { [Op.gt]: twentyFourHoursAgo }
+                status: { [Sequelize.Op.in]: ['PENDING', 'MATCHED', 'IN_PROGRESS', 'COMPLETED'] },
+                created_at: { [Sequelize.Op.gt]: twentyFourHoursAgo }
             },
             include: [{ model: Category, as: 'category' }],
             order: [['created_at', 'DESC']],
@@ -156,8 +155,8 @@ class OrderService {
         const [resolvedThisMonth, totalOrders] = await Promise.all([
             Order.count({
                 where: {
-                    status: { [Op.in]: ['COMPLETED', 'IN_PROGRESS'] },
-                    created_at: { [Op.gte]: startOfMonth }
+                    status: { [Sequelize.Op.in]: ['COMPLETED', 'IN_PROGRESS'] },
+                    created_at: { [Sequelize.Op.gte]: startOfMonth }
                 }
             }),
             Order.count()
@@ -254,7 +253,7 @@ class OrderService {
             {
                 where: {
                     order_id: orderId,
-                    id: { [Op.ne]: postulationId }
+                    id: { [Sequelize.Op.ne]: postulationId }
                 }
             }
         );
