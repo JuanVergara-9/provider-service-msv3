@@ -14,16 +14,17 @@ router.get('/with-counts', async (_req, res, next) => {
     const items = await Category.findAll({
       attributes: [
         'id', 'name', 'slug', 'icon', 'sort_order',
-        [sequelize.fn('COUNT', sequelize.col('providers.id')), 'provider_count']
+        [
+          sequelize.literal(`(
+            SELECT COUNT(DISTINCT p.id)
+            FROM providers AS p
+            LEFT JOIN provider_categories AS pc ON p.id = pc.provider_id
+            WHERE p.status = 'active' 
+              AND (p.category_id = "Category".id OR pc.category_id = "Category".id)
+          )`),
+          'provider_count'
+        ]
       ],
-      include: [{
-        model: Provider,
-        as: 'providers',
-        attributes: [],
-        where: { status: 'active' },
-        required: false
-      }],
-      group: ['Category.id'],
       order: [['sort_order', 'ASC'], ['name', 'ASC']]
     });
     res.json({ items });
