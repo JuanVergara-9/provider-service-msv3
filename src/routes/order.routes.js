@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const ctrl = require('../controllers/order.controller');
-const { requireAuth } = require('../middlewares/auth.middleware');
+const { requireAuth, requireAdmin } = require('../middlewares/auth.middleware');
 const { injectProvider } = require('../middlewares/provider.middleware');
 const { uploadImage } = require('../middlewares/upload.middleware');
 
@@ -11,6 +11,9 @@ router.get('/public/recent', ctrl.getPublicRecent);
 router.get('/stats', ctrl.getStats);
 
 // ========== PROTECTED ROUTES (Auth required) ==========
+// Admin: Ver todos los pedidos
+router.get('/admin/all', requireAdmin, ctrl.adminGetAll);
+
 // Upload image for order (before creating order)
 router.post('/upload-image', requireAuth, uploadImage.single('image'), ctrl.uploadImage);
 // Delete image from Cloudinary

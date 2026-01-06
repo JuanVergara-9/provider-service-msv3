@@ -219,6 +219,25 @@ class OrderService {
         return ordersWithConv;
     }
 
+    async adminGetAllOrders(params = {}) {
+        const { limit = 50, offset = 0, status } = params;
+        const where = {};
+        if (status) where.status = status;
+
+        const { count, rows } = await Order.findAndCountAll({
+            where,
+            include: [
+                { model: Category, as: 'category' },
+                { model: Provider, as: 'winner_provider' }
+            ],
+            order: [['created_at', 'DESC']],
+            limit: parseInt(limit),
+            offset: parseInt(offset)
+        });
+
+        return { total: count, orders: rows };
+    }
+
     async acceptPostulation(orderId, postulationId, clientId) {
         const orderIdNum = Number(orderId);
         const { getIo } = require('../socket');

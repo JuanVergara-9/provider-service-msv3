@@ -5,6 +5,8 @@ const crypto = require('crypto');
 
 function sha8(s){ return crypto.createHash('sha256').update(s || '').digest('hex').slice(0,8); }
 
+const ADMIN_EMAIL = 'app.miservicio@gmail.com';
+
 function requireAuth(req, _res, next) {
   const hdr = req.headers.authorization || '';
   const token = hdr.startsWith('Bearer ') ? hdr.slice(7) : null;
@@ -19,7 +21,7 @@ function requireAuth(req, _res, next) {
       return next(unauthorized('AUTH.INVALID_USER_ID', 'ID de usuario inválido en el token'));
     }
     
-    req.user = { id: Number(payload.userId), userId: Number(payload.userId), role: payload.role };
+    req.user = { id: Number(payload.userId), userId: Number(payload.userId), role: payload.role, email: payload.email };
     return next();
   } catch (e) {
     if (process.env.NODE_ENV !== 'production') {
@@ -32,4 +34,14 @@ function requireAuth(req, _res, next) {
     return next(unauthorized('AUTH.INVALID_TOKEN', msg));
   }
 }
-module.exports = { requireAuth };
+
+function requireAdmin(req, res, next) {
+  requireAuth(req, res, () => {
+    if (req.user?.role === 'admin' || req.user?.email === ADMIN_EMAIL) {
+      return next();
+    }
+    return next(unauthorized('AUTH.FORBIDDEN', 'No tenés permisos para realizar esta acción'));
+  });
+}
+
+module.exports = { requireAuth, requireAdmin };

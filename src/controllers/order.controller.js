@@ -158,6 +158,17 @@ class OrderController {
         }
     }
 
+    async adminGetAll(req, res) {
+        try {
+            const { limit, offset, status } = req.query;
+            const result = await orderService.adminGetAllOrders({ limit, offset, status });
+            res.json(result);
+        } catch (error) {
+            console.error('Error in adminGetAllOrders:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
     async uploadImage(req, res) {
         try {
             if (!req.file) {
