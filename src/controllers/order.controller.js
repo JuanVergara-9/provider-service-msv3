@@ -161,7 +161,8 @@ class OrderController {
     async adminGetAll(req, res) {
         try {
             const { limit, offset, status } = req.query;
-            const result = await orderService.adminGetAllOrders({ limit, offset, status });
+            const token = req.headers.authorization;
+            const result = await orderService.adminGetAllOrders({ limit, offset, status }, token);
             res.json(result);
         } catch (error) {
             console.error('Error in adminGetAllOrders:', error);

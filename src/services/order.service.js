@@ -1,11 +1,30 @@
 const { Order, Provider, Category, Postulation, Conversation, Message, Sequelize } = require('../../models');
 const { appEmitter, EVENTS } = require('../utils/events');
 const { getDistanceKm } = require('../utils/geo');
+const axios = require('axios');
 
 class OrderService {
     constructor() {
         // Escuchar evento de nuevo pedido
         appEmitter.on(EVENTS.ORDER_CREATED, this._handleOrderCreated.bind(this));
+    }
+
+    async _getUserProfiles(userIds, token) {
+        if (!userIds || userIds.length === 0) return [];
+        try {
+            const gatewayUrl = process.env.GATEWAY_URL || process.env.API_GATEWAY_URL || 'http://localhost:4002';
+            const userServiceUrl = gatewayUrl.includes('localhost') ? 'http://localhost:4002/api/v1/users' : `${gatewayUrl}/api/v1/users`;
+            
+            const response = await axios.get(`${userServiceUrl}/batch?ids=${userIds.join(',')}`, {
+                headers: { 'Authorization': token },
+                timeout: 5000
+            });
+            
+            return response.data.profiles || [];
+        } catch (error) {
+            console.error('[OrderService._getUserProfiles] Error fetching profiles:', error.message);
+            return [];
+        }
     }
 
     async createOrder(data) {
@@ -219,7 +238,7 @@ class OrderService {
         return ordersWithConv;
     }
 
-    async adminGetAllOrders(params = {}) {
+    async adminGetAllOrders(params = {}, token) {
         const { limit = 50, offset = 0, status } = params;
         const where = {};
         if (status) where.status = status;
@@ -235,7 +254,27 @@ class OrderService {
             offset: parseInt(offset)
         });
 
-        return { total: count, orders: rows };
+        // Fetch user profiles for the orders
+        const userIds = [...new Set(rows.map(o => o.user_id))];
+        const profiles = await this._getUserProfiles(userIds, token);
+        const profileMap = profiles.reduce((acc, p) => {
+            acc[p.user_id] = p;
+            return acc;
+        }, {});
+
+        const ordersWithUsers = rows.map(o => {
+            const json = o.toJSON();
+            const profile = profileMap[json.user_id];
+            if (profile) {
+                json.user_name = `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Usuario';
+                json.user_avatar = profile.avatar_url;
+            } else {
+                json.user_name = 'Usuario';
+            }
+            return json;
+        });
+
+        return { total: count, orders: ordersWithUsers };
     }
 
     async acceptPostulation(orderId, postulationId, clientId) {
