@@ -27,6 +27,24 @@ class OrderService {
         }
     }
 
+    async _getUserEmails(userIds, token) {
+        if (!userIds || userIds.length === 0) return [];
+        try {
+            const gatewayUrl = process.env.GATEWAY_URL || process.env.API_GATEWAY_URL || 'http://localhost:4001';
+            const authServiceUrl = gatewayUrl.includes('localhost') ? 'http://localhost:4001/api/v1/auth' : `${gatewayUrl}/api/v1/auth`;
+            
+            const response = await axios.get(`${authServiceUrl}/admin/batch-emails?ids=${userIds.join(',')}`, {
+                headers: { 'Authorization': token },
+                timeout: 5000
+            });
+            
+            return response.data.emails || [];
+        } catch (error) {
+            console.error('[OrderService._getUserEmails] Error fetching emails:', error.message);
+            return [];
+        }
+    }
+
     async createOrder(data) {
         const order = await Order.create({
             user_id: data.user_id,
@@ -256,8 +274,28 @@ class OrderService {
 
         // Fetch user profiles for the orders
         const userIds = [...new Set(rows.map(o => o.user_id))];
-        const profiles = await this._getUserProfiles(userIds, token);
+        const [profiles, emails] = await Promise.all([
+            this._getUserProfiles(userIds, token),
+            this._getUserEmails(userIds, token)
+        ]);
+
         const profileMap = profiles.reduce((acc, p) => {
+            acc[p.user_id] = p;
+            return acc;
+        }, {});
+
+        const emailMap = emails.reduce((acc, u) => {
+            acc[u.id] = u.email;
+            return acc;
+        }, {});
+
+        // Fallback: Fetch provider info for these userIds in case they are providers but don't have a user profile name
+        // This is common in development or if they only filled their professional profile
+        const providersAsClients = await Provider.findAll({
+            where: { user_id: { [Sequelize.Op.in]: userIds } },
+            attributes: ['user_id', 'first_name', 'last_name', 'avatar_url']
+        });
+        const providerMap = providersAsClients.reduce((acc, p) => {
             acc[p.user_id] = p;
             return acc;
         }, {});
@@ -265,12 +303,28 @@ class OrderService {
         const ordersWithUsers = rows.map(o => {
             const json = o.toJSON();
             const profile = profileMap[json.user_id];
-            if (profile) {
-                json.user_name = `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Usuario';
+            const provider = providerMap[json.user_id];
+            const email = emailMap[json.user_id];
+            
+            if (profile && (profile.first_name || profile.last_name)) {
+                json.user_name = `${profile.first_name || ''} ${profile.last_name || ''}`.trim();
                 json.user_avatar = profile.avatar_url;
+            } else if (provider) {
+                // Use provider info as fallback
+                json.user_name = `${provider.first_name || ''} ${provider.last_name || ''}`.trim();
+                json.user_avatar = provider.avatar_url;
+            } else if (email) {
+                // Use email prefix as fallback if no name is found
+                json.user_name = email.split('@')[0];
             } else {
                 json.user_name = 'Usuario';
             }
+
+            // Final fallback if name ended up empty after trim
+            if (!json.user_name || json.user_name.trim() === '') {
+                json.user_name = email ? email.split('@')[0] : 'Usuario';
+            }
+
             return json;
         });
 
