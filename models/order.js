@@ -14,7 +14,8 @@ module.exports = (sequelize, DataTypes) => {
         },
         images: { type: DataTypes.JSONB, defaultValue: [] },
         budget_estimate: { type: DataTypes.STRING(100) },
-        winner_provider_id: { type: DataTypes.INTEGER, allowNull: true }
+        winner_provider_id: { type: DataTypes.INTEGER, allowNull: true },
+        final_agreed_price: { type: DataTypes.DECIMAL(12, 2), allowNull: true }
     }, { tableName: 'orders', underscored: true });
 
     Order.associate = (models) => {

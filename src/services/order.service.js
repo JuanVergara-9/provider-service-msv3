@@ -359,11 +359,15 @@ class OrderService {
             throw new Error('Invalid postulation');
         }
 
-        // 2. Marcar ganador y cerrar orden
-        await order.update({
+        // 2. Marcar ganador, guardar precio acordado (Shadow Ledger / GMV) y cerrar orden
+        const updatePayload = {
             winner_provider_id: winnerPostulation.provider_id,
             status: 'IN_PROGRESS'
-        });
+        };
+        if (winnerPostulation.budget != null && winnerPostulation.budget !== '') {
+            updatePayload.final_agreed_price = winnerPostulation.budget;
+        }
+        await order.update(updatePayload);
 
         // 3. Aceptar postulación ganadora
         await winnerPostulation.update({ status: 'ACCEPTED' });
