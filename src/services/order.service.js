@@ -1,4 +1,4 @@
-const { Order, Provider, Category, Postulation, Conversation, Message, Sequelize } = require('../../models');
+const { Order, Provider, Category, Postulation, Conversation, Message, ServiceRequest, Sequelize } = require('../../models');
 const { appEmitter, EVENTS } = require('../utils/events');
 const { getDistanceKm } = require('../utils/geo');
 const axios = require('axios');
@@ -419,6 +419,71 @@ class OrderService {
         }
 
         return { success: true, order, conversationId: conversation.id };
+    }
+
+    /**
+     * Shadow Ledger: match guest request + worker. Captura el precio pactado (budget de la postulación)
+     * ANTES de enviar a WhatsApp. Lead Fee: descuenta 1 crédito si tiene saldo/PRO, sino MATCHED_DEBT.
+     * @param {number} requestId - ServiceRequest.id
+     * @param {number} workerId - Provider.id
+     * @returns {{ success: true, whatsappLink: string }}
+     */
+    async matchFromRequest(requestId, workerId) {
+        const request = await ServiceRequest.findByPk(requestId);
+        if (!request) throw new Error('Service request not found');
+        if (request.status !== 'OPEN') throw new Error('Request is no longer open for matching');
+
+        const postulation = await Postulation.findOne({
+            where: { service_request_id: requestId, provider_id: workerId },
+            include: [{ model: Provider, as: 'provider' }]
+        });
+        if (!postulation) throw new Error('No postulation found for this worker and request');
+        const budget = postulation.budget != null ? Number(postulation.budget) : null;
+
+        const provider = await Provider.findByPk(workerId);
+        if (!provider) throw new Error('Provider not found');
+
+        const categoryId = request.category_id || (await Category.findOne({ where: { name: request.category } }))?.id;
+        if (!categoryId) throw new Error('Category not found for this request');
+
+        const lat = request.lat != null ? request.lat : 0;
+        const lng = request.lng != null ? request.lng : 0;
+        const title = (request.category || 'Servicio').substring(0, 200);
+
+        let orderStatus = 'MATCHED_DEBT';
+        const hasCredits = (provider.credits_balance || 0) >= 1;
+        const isPro = !!provider.is_pro;
+        if (hasCredits || isPro) {
+            orderStatus = 'MATCHED_PAID';
+            if (hasCredits && !isPro) {
+                await provider.decrement('credits_balance', { by: 1 });
+            }
+        }
+
+        const order = await Order.create({
+            user_id: null,
+            category_id: categoryId,
+            title,
+            description: request.description,
+            lat,
+            lng,
+            images: [],
+            status: orderStatus,
+            winner_provider_id: workerId,
+            final_agreed_price: budget,
+            service_request_id: requestId,
+            client_phone: request.client_phone
+        });
+
+        await request.update({ status: 'MATCHED' });
+        await postulation.update({ status: 'ACCEPTED', order_id: order.id });
+
+        const phone = (provider.whatsapp_e164 || provider.phone_e164 || '').replace(/\D/g, '');
+        const whatsappLink = phone
+            ? `https://wa.me/${phone}?text=${encodeURIComponent('Hola, te elijo desde miservicio para mi pedido.')}`
+            : '';
+
+        return { success: true, whatsappLink };
     }
 }
 

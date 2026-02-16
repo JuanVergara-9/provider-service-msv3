@@ -213,6 +213,26 @@ class OrderController {
             res.status(500).json({ error: 'Failed to delete image' });
         }
     }
+
+    /**
+     * POST /api/v1/orders/match - Shadow Ledger: cierra match requestId + workerId.
+     * Input: { requestId, workerId }. NO recibe precio desde frontend (se toma de la postulación).
+     * Output: { success: true, whatsappLink }.
+     */
+    async match(req, res) {
+        try {
+            const { requestId, workerId } = req.body;
+            if (!requestId || !workerId) {
+                return res.status(400).json({ error: 'requestId and workerId are required' });
+            }
+            const result = await orderService.matchFromRequest(Number(requestId), Number(workerId));
+            res.json(result);
+        } catch (error) {
+            console.error('Error in orders/match:', error);
+            const status = /not found|no longer open|No postulation/i.test(error.message) ? 404 : 400;
+            res.status(status).json({ error: error.message || 'Match failed' });
+        }
+    }
 }
 
 module.exports = new OrderController();

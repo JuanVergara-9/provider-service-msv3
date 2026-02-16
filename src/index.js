@@ -95,6 +95,7 @@
       app.use('/api/v1/categories', require('./routes/category.routes'));
       app.use('/api/v1/chat', require('./routes/chat.routes'));
       app.use('/api/v1/orders', require('./routes/order.routes'));
+      app.use('/api/v1/guest', require('./routes/guest.routes'));
       console.log('[provider-service] Routes loaded successfully');
     } catch (error) {
       console.error('[provider-service] Error loading routes:', error);

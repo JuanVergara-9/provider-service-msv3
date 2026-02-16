@@ -2,7 +2,8 @@
 module.exports = (sequelize, DataTypes) => {
     const Postulation = sequelize.define('Postulation', {
         id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-        order_id: { type: DataTypes.INTEGER, allowNull: false },
+        order_id: { type: DataTypes.INTEGER, allowNull: true },
+        service_request_id: { type: DataTypes.INTEGER, allowNull: true },
         provider_id: { type: DataTypes.INTEGER, allowNull: false },
         status: {
             type: DataTypes.ENUM('SENT', 'ACCEPTED', 'REJECTED'),
@@ -14,6 +15,7 @@ module.exports = (sequelize, DataTypes) => {
 
     Postulation.associate = (models) => {
         Postulation.belongsTo(models.Order, { as: 'order', foreignKey: 'order_id' });
+        Postulation.belongsTo(models.ServiceRequest, { as: 'service_request', foreignKey: 'service_request_id' });
         Postulation.belongsTo(models.Provider, { as: 'provider', foreignKey: 'provider_id' });
     };
 

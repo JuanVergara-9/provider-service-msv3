@@ -31,7 +31,9 @@ module.exports = (sequelize, DataTypes) => {
     identity_dni_front_url: DataTypes.STRING(512),
     identity_dni_back_url: DataTypes.STRING(512),
     identity_selfie_url: DataTypes.STRING(512),
-    identity_rejection_reason: DataTypes.STRING
+    identity_rejection_reason: DataTypes.STRING,
+    credits_balance: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    is_pro: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false }
   }, { tableName: 'providers', underscored: true });
 
   Provider.associate = (models) => {

@@ -9,6 +9,8 @@ const { uploadImage } = require('../middlewares/upload.middleware');
 router.get('/public/recent', ctrl.getPublicRecent);
 // Public stats for Home page
 router.get('/stats', ctrl.getStats);
+// Shadow Ledger: match guest request + worker (captura precio y devuelve link WhatsApp)
+router.post('/match', ctrl.match);
 
 // ========== PROTECTED ROUTES (Auth required) ==========
 // Admin: Ver todos los pedidos
