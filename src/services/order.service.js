@@ -483,6 +483,18 @@ class OrderService {
             ? `https://wa.me/${phone}?text=${encodeURIComponent('Hola, te elijo desde miservicio para mi pedido.')}`
             : '';
 
+        // Notificar al trabajador por WhatsApp (fire-and-forget; no bloquea la respuesta)
+        const notificationUrl = process.env.NOTIFICATION_SERVICE_URL;
+        const categoryName = request.category || (await Category.findByPk(categoryId))?.name || 'servicio';
+        const workerName = [provider.first_name, provider.last_name].filter(Boolean).join(' ') || 'Profesional';
+        if (notificationUrl && phone) {
+            axios.post(
+                `${notificationUrl.replace(/\/+$/, '')}/api/v1/notifications/send-whatsapp`,
+                { phoneNumber: provider.whatsapp_e164 || provider.phone_e164, workerName, category: categoryName },
+                { timeout: 8000 }
+            ).catch(err => console.error('[OrderService] notification send-whatsapp failed:', err.message));
+        }
+
         return { success: true, whatsappLink };
     }
 }
