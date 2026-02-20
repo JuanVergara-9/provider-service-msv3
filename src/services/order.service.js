@@ -3,6 +3,9 @@ const { appEmitter, EVENTS } = require('../utils/events');
 const { getDistanceKm } = require('../utils/geo');
 const axios = require('axios');
 
+// Lista blanca / modo desarrollo: solo estos números reciben WhatsApp (evita errores con la API de Meta en dev)
+const ALLOWED_NUMBERS = ['5492604800958']; // Reemplazá por tu número con código de país (ej. 5492604123456)
+
 class OrderService {
     constructor() {
         // Escuchar evento de nuevo pedido
@@ -80,7 +83,11 @@ class OrderService {
         console.log(`[MatchingWorker] Processing new order: ${order.id} (${order.title})`);
 
         try {
-            // 1. Buscar proveedores del mismo rubro
+            // 1. Nombre de categoría para el mensaje WhatsApp
+            const categoryRow = await Category.findByPk(order.category_id);
+            const categoryName = categoryRow?.name || 'Servicio';
+
+            // 2. Buscar proveedores del mismo rubro
             const providers = await Provider.findAll({
                 where: {
                     category_id: order.category_id,
@@ -92,6 +99,7 @@ class OrderService {
 
             const MATCH_RADIUS_KM = 20; // Radio de búsqueda configurable
             const matches = [];
+            const notificationUrl = process.env.NOTIFICATION_SERVICE_URL;
 
             for (const provider of providers) {
                 if (!provider.lat || !provider.lng) continue;
@@ -108,14 +116,34 @@ class OrderService {
                         distance
                     });
 
-                    // Aquí se dispararían las notificaciones (Push, Socket, Email)
-                    // por ahora solo logueamos el match
+                    // Notificación WhatsApp (fire-and-forget): solo si el número está en lista blanca (modo desarrollo)
+                    const phone = provider.whatsapp_e164 || provider.phone_e164;
+                    const phoneNormalized = phone ? String(phone).replace(/\D/g, '') : '';
+                    const isAllowed = phoneNormalized && ALLOWED_NUMBERS.some(n => String(n).replace(/\D/g, '') === phoneNormalized);
+
+                    if (!isAllowed) {
+                        if (phone) {
+                            console.log(`[Test-Mode] Notificación saltada para el proveedor ${provider.first_name} (Número no autorizado).`);
+                        }
+                    } else if (notificationUrl && phone) {
+                        axios.post(
+                            `${notificationUrl.replace(/\/+$/, '')}/api/v1/notifications/send-whatsapp`,
+                            {
+                                phoneNumber: phone,
+                                workerName: provider.first_name,
+                                category: categoryName
+                            },
+                            { timeout: 8000 }
+                        ).then(() => {
+                            console.log(`[Notification-Trigger] WhatsApp enviado a ${provider.first_name}.`);
+                        }).catch(err => {
+                            console.error(`[Notification-Trigger] Error enviando a ${provider.first_name}:`, err.message);
+                        });
+                    }
                 }
             }
 
             if (matches.length > 0) {
-                // Podríamos actualizar el estado a MATCHED si hay interesados directos
-                // o simplemente dejarlo en PENDING hasta que alguien postule.
                 console.log(`[MatchingWorker] Order ${order.id} matched with ${matches.length} providers.`);
             } else {
                 console.log(`[MatchingWorker] No providers found in radius for order ${order.id}.`);
