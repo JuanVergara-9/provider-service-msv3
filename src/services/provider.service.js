@@ -168,22 +168,34 @@ async function clearAvatar(userId) {
 
 /**
  * Listado con filtros básicos y, opcionalmente, distancia (Haversine).
- * params: { categorySlug, city, lat, lng, radiusKm, limit, offset }
+ * params: { categorySlug, categoryName, city, lat, lng, radiusKm, limit, offset, urgency }
  */
 async function list(params = {}) {
   const where = {};
   const include = [];
-  if (params.city) where.city = params.city;
+  
+  // Filtro por ciudad (ILIKE para mayor flexibilidad)
+  if (params.city) {
+    where.city = { [Op.iLike]: `%${params.city}%` };
+  }
+  
   if (params.status) where.status = params.status;
   if (params.isLicensed === true) where.is_licensed = true;
   if (params.identityStatus) where.identity_status = params.identityStatus;
 
-  if (params.categorySlug) {
-    // Use OR condition to match either primary category or any of many-to-many categories
-    where[Op.or] = [
-      { '$category.slug$': params.categorySlug },
-      { '$categories.slug$': params.categorySlug }
-    ];
+  // Filtro por categoría (Slug o Nombre)
+  if (params.categorySlug || params.categoryName) {
+    const categoryConditions = [];
+    if (params.categorySlug) {
+      categoryConditions.push({ '$category.slug$': params.categorySlug });
+      categoryConditions.push({ '$categories.slug$': params.categorySlug });
+    }
+    if (params.categoryName) {
+      categoryConditions.push({ '$category.name$': { [Op.iLike]: `%${params.categoryName}%` } });
+      categoryConditions.push({ '$categories.name$': { [Op.iLike]: `%${params.categoryName}%` } });
+    }
+
+    where[Op.or] = categoryConditions;
     include.push({ model: Category, as: 'category', required: false, attributes: ['id', 'name', 'slug', 'icon'] });
     include.push({ model: Category, as: 'categories', required: false, attributes: ['id', 'name', 'slug', 'icon'] });
   } else {
@@ -191,7 +203,21 @@ async function list(params = {}) {
     include.push({ model: Category, as: 'categories', required: false, attributes: ['id', 'name', 'slug', 'icon'] });
   }
 
-  const query = { where, include, limit: Math.min(Number(params.limit || 20), 100), offset: Number(params.offset || 0), order: [['id', 'ASC']] };
+  // Orden por defecto
+  let order = [['is_pro', 'DESC'], ['id', 'ASC']];
+
+  // Si la urgencia es alta, priorizar emergency_available
+  if (params.urgency && (params.urgency.toLowerCase() === 'alta' || params.urgency.toLowerCase() === 'urgente')) {
+    order = [['emergency_available', 'DESC'], ['is_pro', 'DESC'], ['id', 'ASC']];
+  }
+
+  const query = { 
+    where, 
+    include, 
+    limit: Math.min(Number(params.limit || 20), 100), 
+    offset: Number(params.offset || 0), 
+    order 
+  };
 
   // Filtro por distancia (opcional)
   const lat = parseFloat(params.lat), lng = parseFloat(params.lng), radius = Math.min(parseFloat(params.radiusKm || 0) || 0, 200);

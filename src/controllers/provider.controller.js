@@ -147,8 +147,13 @@ async function list(req, res, next) {
   try {
     const licensedParam = (req.query.licensed || '').toString().toLowerCase();
     const isLicensed = licensedParam === 'true' || licensedParam === '1' ? true : undefined;
+    
+    // Soporte para matchmaking (urgency)
+    const urgency = req.query.urgency;
+
     const r = await svc.list({
       categorySlug: req.query.category,
+      categoryName: req.query.categoryName, // Nuevo filtro por nombre
       city: req.query.city,
       lat: req.query.lat,
       lng: req.query.lng,
@@ -156,7 +161,8 @@ async function list(req, res, next) {
       limit: req.query.limit,
       offset: req.query.offset,
       status: 'active',
-      isLicensed
+      isLicensed,
+      urgency
     });
     res.json({ count: r.count, items: r.rows });
   } catch (e) { next(e); }
