@@ -36,7 +36,6 @@ async function getById(id) {
 async function getMine(userId) {
   console.log('[getMine] Searching for provider with userId:', userId, typeof userId);
 
-  // Validar que userId es un número válido
   if (!userId || isNaN(userId) || userId <= 0) {
     console.error('[getMine] Invalid userId in service:', userId);
     throw new Error('Invalid userId provided to getMine service');
@@ -50,11 +49,8 @@ async function getMine(userId) {
     ]
   };
 
-  console.log('[getMine] Sequelize query:', JSON.stringify(query, null, 2));
-
   try {
     const result = await Provider.findOne(query);
-    console.log('[getMine] Query result:', result ? 'Provider found' : 'No provider found');
     return result;
   } catch (error) {
     console.error('[getMine] Database error:', error.message);
@@ -87,7 +83,6 @@ async function createOrGetMine(userId, payload) {
       if (coords) {
         finalLat = coords.lat;
         finalLng = coords.lng;
-        console.log('[createOrGetMine] Auto-geocoded city:', payload.city, '→', coords);
       }
     }
   }
@@ -127,7 +122,6 @@ async function updateMine(userId, payload) {
     if (coords) {
       updatedPayload.lat = coords.lat;
       updatedPayload.lng = coords.lng;
-      console.log('[updateMine] Auto-geocoded city:', payload.city, '→', coords);
     }
   }
 
@@ -216,7 +210,9 @@ async function list(params = {}) {
     include, 
     limit: Math.min(Number(params.limit || 20), 100), 
     offset: Number(params.offset || 0), 
-    order 
+    order,
+    distinct: true,
+    subQuery: false
   };
 
   // Filtro por distancia (opcional)
@@ -232,10 +228,7 @@ async function list(params = {}) {
         lng: { [Op.between]: [lng - lngDelta, lng + lngDelta] }
       },
       {
-        [Op.or]: [
-          { lat: null },
-          { lng: null }
-        ]
+        [Op.or]: [{ lat: null }, { lng: null }]
       }
     ];
 
@@ -256,16 +249,10 @@ async function list(params = {}) {
     query.order = Sequelize.literal('distance_km ASC NULLS LAST');
   }
 
-  // Evitar problemas con includes + limit y filtros por alias ($alias.col$)
-  // distinct para que el count sea correcto con joins y subQuery:false para que
-  // el WHERE con $category.slug$/$categories.slug$ funcione correctamente.
-  query.distinct = true;
-  query.subQuery = false;
   try {
     return await Provider.findAndCountAll(query);
   } catch (error) {
     console.error('[list] Query error:', error.message);
-    console.error('[list] Query:', JSON.stringify(query, null, 2));
     throw error;
   }
 }
