@@ -103,7 +103,13 @@
       process.exit(1);
     }
 
-    // Error handler
+    // 404 cuando ninguna ruta coincide (para diagnosticar si las peticiones llegan al servicio)
+    app.use((req, res) => {
+      console.warn('[provider-service] 404:', req.method, req.originalUrl);
+      res.status(404).json({ status: false, message: 'Route not found', path: req.originalUrl });
+    });
+
+    // Error handler (solo para errores pasados con next(err))
     app.use((err, _req, res, _next) => {
       const s = err.status || 500;
       res.status(s).json({ error: { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Internal error' } });

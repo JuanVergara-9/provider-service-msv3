@@ -3,7 +3,9 @@ const ctrl = require('../controllers/provider.controller');
 const { requireAuth } = require('../middlewares/auth.middleware');
 const { uploadImage, uploadImageMultiple } = require('../middlewares/upload.middleware');
 
+// Listado público (GET /api/v1/providers o /api/v1/providers/). '' por si el path llega vacío.
 router.get('/', ctrl.list);
+router.get('', ctrl.list);
 router.get('/stats/summary', ctrl.providerSummary);
 router.get('/user-ids', ctrl.providerUserIds);
 router.get('/check/:userId', ctrl.checkIsProvider);
