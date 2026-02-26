@@ -215,22 +215,29 @@ async function list(params = {}) {
     subQuery: false
   };
 
-  // Filtro por distancia (opcional)
+  // Filtro por distancia (opcional). Si ya hay Op.or (categoría), combinamos con Op.and para no pisarlo.
   const lat = parseFloat(params.lat), lng = parseFloat(params.lng), radius = Math.min(parseFloat(params.radiusKm || 0) || 0, 200);
   if (!Number.isNaN(lat) && !Number.isNaN(lng) && radius > 0) {
     const R = 6371;
     const latDelta = (radius / R) * (180 / Math.PI);
     const lngDelta = (radius / R) * (180 / Math.PI) / Math.cos(lat * Math.PI / 180);
-    
-    where[Op.or] = [
-      {
-        lat: { [Op.between]: [lat - latDelta, lat + latDelta] },
-        lng: { [Op.between]: [lng - lngDelta, lng + lngDelta] }
-      },
-      {
-        [Op.or]: [{ lat: null }, { lng: null }]
-      }
-    ];
+
+    const radiusCondition = {
+      [Op.or]: [
+        {
+          lat: { [Op.between]: [lat - latDelta, lat + latDelta] },
+          lng: { [Op.between]: [lng - lngDelta, lng + lngDelta] }
+        },
+        { [Op.or]: [{ lat: null }, { lng: null }] }
+      ]
+    };
+
+    if (where[Op.or]) {
+      where[Op.and] = [{ [Op.or]: where[Op.or] }, radiusCondition];
+      delete where[Op.or];
+    } else {
+      where[Op.or] = radiusCondition[Op.or];
+    }
 
     query.attributes = {
       include: [
