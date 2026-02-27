@@ -167,12 +167,21 @@ async function clearAvatar(userId) {
 async function list(params = {}) {
   const where = {};
   const include = [];
-  
-  // Filtro por ciudad (ILIKE para mayor flexibilidad)
-  if (params.city) {
-    where.city = { [Op.iLike]: `%${params.city}%` };
+
+  // Filtro por zona: buscar en city O province (el parámetro city representa la zona general)
+  const cityOrProvinceCondition = params.city
+    ? {
+        [Op.or]: [
+          { city: { [Op.iLike]: `%${params.city}%` } },
+          { province: { [Op.iLike]: `%${params.city}%` } }
+        ]
+      }
+    : null;
+  if (cityOrProvinceCondition) {
+    where[Op.and] = where[Op.and] || [];
+    where[Op.and].push(cityOrProvinceCondition);
   }
-  
+
   if (params.status) where.status = params.status;
   if (params.isLicensed === true) where.is_licensed = true;
   if (params.identityStatus) where.identity_status = params.identityStatus;
@@ -189,7 +198,12 @@ async function list(params = {}) {
       categoryConditions.push({ '$categories.name$': { [Op.iLike]: `%${params.categoryName}%` } });
     }
 
-    where[Op.or] = categoryConditions;
+    const categoryOr = { [Op.or]: categoryConditions };
+    if (where[Op.and]) {
+      where[Op.and].push(categoryOr);
+    } else {
+      where[Op.or] = categoryConditions;
+    }
     include.push({ model: Category, as: 'category', required: false, attributes: ['id', 'name', 'slug', 'icon'] });
     include.push({ model: Category, as: 'categories', required: false, attributes: ['id', 'name', 'slug', 'icon'] });
   } else {
