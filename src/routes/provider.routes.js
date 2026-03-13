@@ -3,6 +3,15 @@ const ctrl = require('../controllers/provider.controller');
 const { requireAuth } = require('../middlewares/auth.middleware');
 const { uploadImage, uploadImageMultiple } = require('../middlewares/upload.middleware');
 
+const SYNC_STATS_KEY = process.env.SYNC_STATS_API_KEY;
+const requireSyncStatsAuth = (req, res, next) => {
+  if (SYNC_STATS_KEY && req.headers['x-api-key'] === SYNC_STATS_KEY) return next();
+  const hdr = req.headers.authorization || '';
+  const token = hdr.startsWith('Bearer ') ? hdr.slice(7) : null;
+  if (token) return requireAuth(req, res, next);
+  return res.status(401).json({ success: false, error: 'Unauthorized: x-api-key o Bearer token requerido' });
+};
+
 // Listado público (GET /api/v1/providers o /api/v1/providers/). '' por si el path llega vacío.
 router.get('/', ctrl.list);
 router.get('', ctrl.list);
@@ -40,10 +49,12 @@ router.post('/me', requireAuth, ctrl.createMine);
 router.put('/me', requireAuth, ctrl.updateMine);
 
 // Ruta con parámetro numérico al final para evitar capturar '/mine'
-// Consultar disponibilidad pública por id
 router.get('/:id/availability', ctrl.getAvailability);
 
-// Ruta genérica al final (orden importa). Evita capturar '/mine' por estar antes.
+// Sincronizar CV Vivo (reseña + ingreso). Interno: x-api-key o JWT Bearer (notification-service)
+router.post('/:id/sync-stats', requireSyncStatsAuth, ctrl.syncStats);
+
+// Ruta genérica al final (orden importa)
 router.get('/:id', ctrl.getById); // público
 
 module.exports = router;

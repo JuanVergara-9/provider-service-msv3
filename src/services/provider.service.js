@@ -293,4 +293,29 @@ async function getProviderUserIds() {
   return { userIds };
 }
 
-module.exports = { getById, getMine, createOrGetMine, updateMine, list, setAvatar, clearAvatar, getProviderSummary, getProviderUserIds };
+/**
+ * Sincroniza una nueva reseña e ingreso con el perfil del proveedor (CV Vivo).
+ * @param {number} providerId - ID del proveedor.
+ * @param {object} payload - { newRating: number (1-5), amountEarned: number }
+ * @returns {Promise<object|null>} Provider actualizado o null.
+ */
+async function syncStats(providerId, payload) {
+  const { newRating, amountEarned } = payload;
+  const provider = await Provider.findByPk(providerId);
+  if (!provider) return null;
+
+  const oldTotal = Number(provider.total_reviews || 0);
+  const oldAvg = Number(provider.average_rating || 0);
+  const totalReviews = oldTotal + 1;
+  const averageRating = ((oldAvg * oldTotal) + newRating) / totalReviews;
+  const totalEarned = (Number(provider.total_earned) || 0) + Number(amountEarned || 0);
+
+  await provider.update({
+    total_reviews: totalReviews,
+    average_rating: Number(averageRating.toFixed(2)),
+    total_earned: totalEarned
+  });
+  return provider;
+}
+
+module.exports = { getById, getMine, createOrGetMine, updateMine, list, setAvatar, clearAvatar, getProviderSummary, getProviderUserIds, syncStats };

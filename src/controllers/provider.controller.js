@@ -185,6 +185,24 @@ async function checkIsProvider(req, res, next) {
   } catch (err) { next(err); }
 }
 
+/** POST /:id/sync-stats - Interno: actualiza total_reviews, average_rating, total_earned (CV Vivo). Body: { newRating, amountEarned } */
+async function syncStats(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!id || isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid provider id' });
+    const { newRating, amountEarned } = req.body || {};
+    if (newRating == null || newRating < 1 || newRating > 5) {
+      return res.status(400).json({ success: false, error: 'newRating (1-5) is required' });
+    }
+    const provider = await svc.syncStats(id, {
+      newRating: Number(newRating),
+      amountEarned: Number(amountEarned) || 0
+    });
+    if (!provider) return res.status(404).json({ success: false, error: 'Provider not found' });
+    res.json({ success: true, provider: { id: provider.id, total_reviews: provider.total_reviews, average_rating: provider.average_rating, total_earned: provider.total_earned } });
+  } catch (err) { next(err); }
+}
+
 module.exports = {
   getById,
   getMine,
@@ -199,6 +217,7 @@ module.exports = {
   providerSummary,
   providerUserIds,
   checkIsProvider,
+  syncStats,
   uploadIdentityDocs,
   adminReviewIdentity,
   listForAdmin
