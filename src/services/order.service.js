@@ -284,6 +284,33 @@ class OrderService {
         return ordersWithConv;
     }
 
+    async getAdminGMVStats() {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+        const [rows] = await Order.sequelize.query(`
+            SELECT
+                COALESCE(SUM(final_agreed_price) FILTER (WHERE status = 'COMPLETED'), 0)::numeric AS gmv_completed,
+                COALESCE(SUM(final_agreed_price) FILTER (WHERE status IN ('IN_PROGRESS', 'MATCHED', 'MATCHED_PAID', 'MATCHED_DEBT')), 0)::numeric AS gmv_in_progress,
+                COALESCE(SUM(final_agreed_price), 0)::numeric AS gmv_total,
+                COUNT(*) FILTER (WHERE status = 'COMPLETED')::int AS completed_count,
+                COUNT(*) FILTER (WHERE status IN ('IN_PROGRESS', 'MATCHED', 'MATCHED_PAID', 'MATCHED_DEBT'))::int AS in_progress_count,
+                COUNT(*) FILTER (WHERE final_agreed_price IS NOT NULL)::int AS transactions_with_price
+            FROM orders
+            WHERE final_agreed_price IS NOT NULL
+              AND created_at >= :thirtyDaysAgo
+        `, { replacements: { thirtyDaysAgo } });
+
+        const row = rows[0] || {};
+        return {
+            gmvCompleted: Number(row.gmv_completed || 0),
+            gmvInProgress: Number(row.gmv_in_progress || 0),
+            gmvTotal: Number(row.gmv_total || 0),
+            completedCount: Number(row.completed_count || 0),
+            inProgressCount: Number(row.in_progress_count || 0),
+            transactionsWithPrice: Number(row.transactions_with_price || 0),
+        };
+    }
+
     async adminGetAllOrders(params = {}, token) {
         const { limit = 50, offset = 0, status } = params;
         const where = {};

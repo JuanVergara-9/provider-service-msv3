@@ -43,7 +43,8 @@ async function list(req, res, next) {
       offset: req.query.offset,
       status: 'active',
       isLicensed,
-      urgency: req.query.urgency
+      urgency: req.query.urgency,
+      identityStatus: req.query.identityStatus
     });
     res.json({ count: r.count, items: r.rows });
   } catch (e) { next(e); }

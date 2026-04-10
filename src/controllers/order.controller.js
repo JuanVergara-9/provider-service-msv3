@@ -158,6 +158,16 @@ class OrderController {
         }
     }
 
+    async adminGetGMVStats(req, res) {
+        try {
+            const stats = await orderService.getAdminGMVStats();
+            res.json(stats);
+        } catch (error) {
+            console.error('Error fetching GMV stats:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
     async adminGetAll(req, res) {
         try {
             const { limit, offset, status } = req.query;

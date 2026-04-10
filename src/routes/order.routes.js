@@ -15,6 +15,8 @@ router.post('/match', ctrl.match);
 // ========== PROTECTED ROUTES (Auth required) ==========
 // Admin: Ver todos los pedidos
 router.get('/admin/all', requireAdmin, ctrl.adminGetAll);
+// Admin: GMV de órdenes web (Shadow Ledger - fuente app)
+router.get('/admin/gmv', requireAdmin, ctrl.adminGetGMVStats);
 
 // Upload image for order (before creating order)
 router.post('/upload-image', requireAuth, uploadImage.single('image'), ctrl.uploadImage);
