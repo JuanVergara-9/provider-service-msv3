@@ -163,10 +163,18 @@ async function clearAvatar(userId) {
 /**
  * Listado con filtros básicos y, opcionalmente, distancia (Haversine).
  * params: { categorySlug, categoryName, city, lat, lng, radiusKm, limit, offset, urgency }
+ *
+ * Siempre se prioriza identity_status = 'verified' antes que el resto del orden (is_pro, distancia, etc.).
  */
 async function list(params = {}) {
   const where = {};
   const include = [];
+
+  /** Criterio 1: verificados arriba (listado público web y cualquier sort futuro debe ir después). */
+  const orderVerifiedFirst = [
+    Sequelize.literal(`CASE WHEN "providers"."identity_status" = 'verified' THEN 1 ELSE 2 END`),
+    'ASC'
+  ];
 
   // Filtro por zona: buscar en city O province (el parámetro city representa la zona general)
   const cityOrProvinceCondition = params.city
@@ -211,12 +219,23 @@ async function list(params = {}) {
     include.push({ model: Category, as: 'categories', required: false, attributes: ['id', 'name', 'slug', 'icon'] });
   }
 
-  // Orden por defecto
-  let order = [['is_pro', 'DESC'], ['id', 'ASC']];
+  // Orden por defecto (verificados primero, luego PRO, recientes, id estable)
+  let order = [
+    orderVerifiedFirst,
+    ['is_pro', 'DESC'],
+    ['createdAt', 'DESC'],
+    ['id', 'ASC']
+  ];
 
-  // Si la urgencia es alta, priorizar emergency_available
+  // Si la urgencia es alta, priorizar emergency_available (siempre después de verificados)
   if (params.urgency && (params.urgency.toLowerCase() === 'alta' || params.urgency.toLowerCase() === 'urgente')) {
-    order = [['emergency_available', 'DESC'], ['is_pro', 'DESC'], ['id', 'ASC']];
+    order = [
+      orderVerifiedFirst,
+      ['emergency_available', 'DESC'],
+      ['is_pro', 'DESC'],
+      ['createdAt', 'DESC'],
+      ['id', 'ASC']
+    ];
   }
 
   const query = { 
@@ -267,7 +286,12 @@ async function list(params = {}) {
         `), 'distance_km']
       ]
     };
-    query.order = Sequelize.literal('distance_km ASC NULLS LAST');
+    query.order = [
+      orderVerifiedFirst,
+      Sequelize.literal('distance_km ASC NULLS LAST'),
+      ['createdAt', 'DESC'],
+      ['id', 'ASC']
+    ];
   }
 
   try {
