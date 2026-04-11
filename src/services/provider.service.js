@@ -165,15 +165,15 @@ async function clearAvatar(userId) {
  * params: { categorySlug, categoryName, city, lat, lng, radiusKm, limit, offset, urgency }
  *
  * Siempre se prioriza identity_status = 'verified' antes que el resto del orden (is_pro, distancia, etc.).
+ * Con distinct + JOINs, PostgreSQL exige que lo ordenado salga en el SELECT: usamos alias _verifiedSort.
  */
 async function list(params = {}) {
   const where = {};
   const include = [];
 
-  /** Criterio 1: verificados arriba (listado público web y cualquier sort futuro debe ir después). */
-  const orderVerifiedFirst = [
-    Sequelize.literal(`CASE WHEN "providers"."identity_status" = 'verified' THEN 1 ELSE 2 END`),
-    'ASC'
+  const verifiedSortAttr = [
+    Sequelize.literal(`CASE WHEN "Provider"."identity_status" = 'verified' THEN 1 ELSE 2 END`),
+    '_verifiedSort'
   ];
 
   // Filtro por zona: buscar en city O province (el parámetro city representa la zona general)
@@ -221,7 +221,7 @@ async function list(params = {}) {
 
   // Orden por defecto (verificados primero, luego PRO, recientes, id estable)
   let order = [
-    orderVerifiedFirst,
+    ['_verifiedSort', 'ASC'],
     ['is_pro', 'DESC'],
     ['createdAt', 'DESC'],
     ['id', 'ASC']
@@ -230,7 +230,7 @@ async function list(params = {}) {
   // Si la urgencia es alta, priorizar emergency_available (siempre después de verificados)
   if (params.urgency && (params.urgency.toLowerCase() === 'alta' || params.urgency.toLowerCase() === 'urgente')) {
     order = [
-      orderVerifiedFirst,
+      ['_verifiedSort', 'ASC'],
       ['emergency_available', 'DESC'],
       ['is_pro', 'DESC'],
       ['createdAt', 'DESC'],
@@ -238,12 +238,13 @@ async function list(params = {}) {
     ];
   }
 
-  const query = { 
-    where, 
-    include, 
-    limit: Math.min(Number(params.limit || 20), 100), 
-    offset: Number(params.offset || 0), 
+  const query = {
+    where,
+    include,
+    limit: Math.min(Number(params.limit || 20), 100),
+    offset: Number(params.offset || 0),
     order,
+    attributes: { include: [verifiedSortAttr] },
     distinct: true,
     subQuery: false
   };
@@ -274,6 +275,7 @@ async function list(params = {}) {
 
     query.attributes = {
       include: [
+        verifiedSortAttr,
         [Sequelize.literal(`
           CASE 
             WHEN lat IS NULL OR lng IS NULL THEN NULL
@@ -287,7 +289,7 @@ async function list(params = {}) {
       ]
     };
     query.order = [
-      orderVerifiedFirst,
+      ['_verifiedSort', 'ASC'],
       Sequelize.literal('distance_km ASC NULLS LAST'),
       ['createdAt', 'DESC'],
       ['id', 'ASC']
