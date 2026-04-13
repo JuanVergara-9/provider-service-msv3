@@ -3,6 +3,15 @@ const { appEmitter, EVENTS } = require('../utils/events');
 const { getDistanceKm } = require('../utils/geo');
 const axios = require('axios');
 
+/** Pedidos sin fecha o con fecha inválida se consideran recientes (no ocultar en el feed). */
+function isOrderWithinRetentionHours(createdAt, maxHours) {
+    if (createdAt == null) return true;
+    const t = new Date(createdAt).getTime();
+    if (Number.isNaN(t)) return true;
+    const hoursSince = (Date.now() - t) / (1000 * 60 * 60);
+    return hoursSince <= maxHours;
+}
+
 // Lista blanca / modo desarrollo: solo estos números reciben WhatsApp (evita errores con la API de Meta en dev)
 const ALLOWED_NUMBERS = ['5492604800958']; // Reemplazá por tu número con código de país (ej. 5492604123456)
 
@@ -49,6 +58,7 @@ class OrderService {
     }
 
     async createOrder(data) {
+        const now = new Date();
         const order = await Order.create({
             user_id: data.user_id,
             category_id: data.category_id,
@@ -58,7 +68,9 @@ class OrderService {
             lng: data.lng,
             images: data.images || [],
             budget_estimate: data.budget_estimate,
-            status: 'PENDING'
+            status: 'PENDING',
+            createdAt: now,
+            updatedAt: now
         });
 
         // Emitir evento asíncrono para el matching
@@ -156,24 +168,22 @@ class OrderService {
 
     async getAvailableJobs(provider) {
         const EXPIRE_TIME_HS = 72;
-        const expirationLimit = new Date();
-        expirationLimit.setHours(expirationLimit.getHours() - EXPIRE_TIME_HS);
 
-        // Buscar pedidos de la categoría del proveedor dentro de un radio razonable
-        // Esto es lo que alimentará el feed del profesional
+        // Sin filtro SQL por fecha: filas con created_at nulo/incorrecto no quedan fuera del feed.
+        // La ventana de 72h se aplica en memoria con tolerancia a fechas inválidas.
         const orders = await Order.findAll({
             where: {
                 category_id: provider.category_id,
-                status: 'PENDING',
-                created_at: {
-                    [Sequelize.Op.gt]: expirationLimit
-                }
+                status: 'PENDING'
             },
             order: [['created_at', 'DESC']]
         });
 
-        // Filtrar por distancia manualmente
         return orders.filter(order => {
+            const createdAt = order.created_at ?? order.createdAt;
+            if (!isOrderWithinRetentionHours(createdAt, EXPIRE_TIME_HS)) {
+                return false;
+            }
             const distance = getDistanceKm(
                 parseFloat(order.lat), parseFloat(order.lng),
                 parseFloat(provider.lat), parseFloat(provider.lng)

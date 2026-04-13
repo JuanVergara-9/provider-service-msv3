@@ -18,7 +18,13 @@ module.exports = (sequelize, DataTypes) => {
         final_agreed_price: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
         service_request_id: { type: DataTypes.INTEGER, allowNull: true },
         client_phone: { type: DataTypes.STRING(32), allowNull: true }
-    }, { tableName: 'orders', underscored: true });
+    }, {
+        tableName: 'orders',
+        underscored: true,
+        timestamps: true,
+        createdAt: 'created_at',
+        updatedAt: 'updated_at'
+    });
 
     Order.associate = (models) => {
         Order.belongsTo(models.Category, { as: 'category', foreignKey: 'category_id' });
