@@ -560,6 +560,23 @@ class OrderService {
             ).catch(err => console.error('[OrderService] notification send-whatsapp failed:', err.message));
         }
 
+        // Credit History: emit LEAD_PAID or LEAD_DEBT event (fire-and-forget)
+        if (notificationUrl) {
+            const creditEventType = orderStatus === 'MATCHED_PAID' ? 'LEAD_PAID' : 'LEAD_DEBT';
+            const internalKey = process.env.CREDIT_EVENTS_INTERNAL_KEY || process.env.JWT_SECRET || '';
+            axios.post(
+                `${notificationUrl.replace(/\/+$/, '')}/api/v1/internal/credit-events`,
+                {
+                    provider_id: workerId,
+                    event_type: creditEventType,
+                    amount: budget,
+                    metadata: { order_id: order.id, service_request_id: requestId },
+                    source: 'web'
+                },
+                { headers: { 'x-internal-key': internalKey }, timeout: 8000 }
+            ).catch(err => console.error(`[OrderService] Credit event ${creditEventType} failed:`, err.message));
+        }
+
         return { success: true, whatsappLink };
     }
 }
