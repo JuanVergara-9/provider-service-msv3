@@ -19,7 +19,6 @@ const createSchema = z.object({
   years_experience: z.number().int().min(0).max(80).optional(),
   price_hint: z.number().int().min(0).max(10000000).optional(),
   emergency_available: z.boolean().optional(),
-  is_licensed: z.boolean().optional(),
   business_hours: z.any().optional()
 }).strict();
 
@@ -29,9 +28,6 @@ async function getById(req, res, next) { try { const p = await svc.getById(Numbe
 
 async function list(req, res, next) {
   try {
-    const licensedParam = (req.query.licensed || '').toString().toLowerCase();
-    const isLicensed = licensedParam === 'true' || licensedParam === '1' ? true : undefined;
-    
     const r = await svc.list({
       categorySlug: req.query.category,
       categoryName: req.query.categoryName,
@@ -42,9 +38,9 @@ async function list(req, res, next) {
       limit: req.query.limit,
       offset: req.query.offset,
       status: 'active',
-      isLicensed,
       urgency: req.query.urgency,
-      identityStatus: req.query.identityStatus
+      identityStatus: req.query.identityStatus,
+      certificationStatus: req.query.certificationStatus
     });
     res.json({ count: r.count, items: r.rows });
   } catch (e) { next(e); }
@@ -148,11 +144,63 @@ async function uploadIdentityDocs(req, res, next) {
   } catch (e) { next(e); }
 }
 
+async function uploadCertificationDoc(req, res, next) {
+  try {
+    const userId = Number(req.user?.userId);
+    if (!userId || isNaN(userId)) return res.status(401).json({ error: 'No autorizado' });
+    if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'Archivo requerido' });
+    const mine = await svc.getMine(userId);
+    if (!mine) return res.status(404).json({ error: 'Perfil no encontrado' });
+    const uploadResult = await uploadBuffer(req.file.buffer, {
+      folder: 'miservicio/providers/certifications',
+      public_id: `cert_${mine.id}_${Date.now()}`
+    });
+    const updated = await svc.setCertificationDocumentPending(userId, uploadResult.secure_url);
+    res.json({ provider: updated });
+  } catch (e) { next(e); }
+}
+
 async function adminReviewIdentity(req, res, next) {
   try {
-    const provider = await svc.getById(Number(req.params.id));
-    await provider.update(req.body);
-    res.json({ provider });
+    const id = Number(req.params.id);
+    const provider = await svc.getById(id);
+    const { status, rejection_reason } = req.body || {};
+    if (status === 'verified' || status === 'rejected') {
+      await provider.update({
+        identity_status: status === 'verified' ? 'verified' : 'rejected',
+        identity_rejection_reason: status === 'rejected' ? (rejection_reason || null) : null
+      });
+    } else {
+      await provider.update(req.body);
+    }
+    const fresh = await svc.getById(id);
+    res.json({ provider: fresh });
+  } catch (e) { next(e); }
+}
+
+async function adminReviewCertification(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const { status, rejection_reason, has_background_check } = req.body || {};
+    const provider = await svc.getById(id);
+    if (status === 'verified') {
+      await provider.update({
+        is_certified: true,
+        certification_status: 'verified',
+        certification_rejection_reason: null,
+        ...(typeof has_background_check === 'boolean' ? { has_background_check } : {})
+      });
+    } else if (status === 'rejected') {
+      await provider.update({
+        is_certified: false,
+        certification_status: 'rejected',
+        certification_rejection_reason: rejection_reason || null
+      });
+    } else {
+      return res.status(400).json({ error: 'status debe ser verified o rejected' });
+    }
+    const fresh = await svc.getById(id);
+    res.json({ provider: fresh });
   } catch (e) { next(e); }
 }
 
@@ -220,6 +268,8 @@ module.exports = {
   checkIsProvider,
   syncStats,
   uploadIdentityDocs,
+  uploadCertificationDoc,
   adminReviewIdentity,
+  adminReviewCertification,
   listForAdmin
 };

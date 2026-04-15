@@ -111,11 +111,20 @@ async function createOrGetMine(userId, payload) {
   return getById(provider.id);
 }
 
+/** Campos de confianza / suscripción: solo administración o procesos internos, no el perfil público PUT /mine */
+const FORBIDDEN_SELF_UPDATE = new Set([
+  'is_licensed', 'is_pro', 'has_background_check', 'is_certified',
+  'certification_status', 'certification_doc_url', 'certification_rejection_reason',
+  'identity_status', 'identity_dni_front_url', 'identity_dni_back_url', 'identity_selfie_url', 'identity_rejection_reason',
+  'credits_balance', 'total_reviews', 'average_rating', 'total_earned'
+]);
+
 async function updateMine(userId, payload) {
   const mine = await getMine(userId);
   if (!mine) throw notFound('PROVIDER.NOT_FOUND', 'Aún no tienes perfil de proveedor');
 
   const updatedPayload = { ...payload };
+  for (const k of FORBIDDEN_SELF_UPDATE) delete updatedPayload[k];
 
   if (payload.city && (!payload.lat || !payload.lng)) {
     const coords = await geocodeCity(payload.city, payload.province || mine.province);
@@ -160,6 +169,18 @@ async function clearAvatar(userId) {
   return mine;
 }
 
+async function setCertificationDocumentPending(userId, docUrl) {
+  const mine = await getMine(userId);
+  if (!mine) throw notFound('PROVIDER.NOT_FOUND', 'Aún no tienes perfil de proveedor');
+  await mine.update({
+    certification_doc_url: docUrl,
+    certification_status: 'pending',
+    certification_rejection_reason: null,
+    is_certified: false
+  });
+  return getMine(userId);
+}
+
 /**
  * Listado con filtros básicos y, opcionalmente, distancia (Haversine).
  * params: { categorySlug, categoryName, city, lat, lng, radiusKm, limit, offset, urgency }
@@ -191,8 +212,8 @@ async function list(params = {}) {
   }
 
   if (params.status) where.status = params.status;
-  if (params.isLicensed === true) where.is_licensed = true;
   if (params.identityStatus) where.identity_status = params.identityStatus;
+  if (params.certificationStatus) where.certification_status = params.certificationStatus;
 
   // Filtro por categoría (Slug o Nombre)
   if (params.categorySlug || params.categoryName) {
@@ -344,4 +365,16 @@ async function syncStats(providerId, payload) {
   return provider;
 }
 
-module.exports = { getById, getMine, createOrGetMine, updateMine, list, setAvatar, clearAvatar, getProviderSummary, getProviderUserIds, syncStats };
+module.exports = {
+  getById,
+  getMine,
+  createOrGetMine,
+  updateMine,
+  list,
+  setAvatar,
+  clearAvatar,
+  setCertificationDocumentPending,
+  getProviderSummary,
+  getProviderUserIds,
+  syncStats
+};

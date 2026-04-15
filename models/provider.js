@@ -19,7 +19,17 @@ module.exports = (sequelize, DataTypes) => {
     years_experience: DataTypes.SMALLINT,
     price_hint: DataTypes.INTEGER,
     emergency_available: { type: DataTypes.BOOLEAN, defaultValue: false },
+    /** @deprecated Solo histórico; no editable por el trabajador. Usar is_certified (admin). */
     is_licensed: { type: DataTypes.BOOLEAN, defaultValue: false },
+    has_background_check: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    is_certified: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    certification_status: {
+      type: DataTypes.ENUM('not_submitted', 'pending', 'verified', 'rejected'),
+      allowNull: false,
+      defaultValue: 'not_submitted'
+    },
+    certification_doc_url: DataTypes.STRING(512),
+    certification_rejection_reason: DataTypes.STRING,
     business_hours: DataTypes.JSONB,
     avatar_url: DataTypes.STRING(512),
     avatar_public_id: DataTypes.STRING(256),

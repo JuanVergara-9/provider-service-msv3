@@ -40,9 +40,13 @@ router.delete('/mine/avatar', requireAuth, ctrl.deleteAvatar);
 // Identity verification (trabajador)
 router.post('/mine/identity', requireAuth, uploadIdentity, ctrl.uploadIdentityDocs);
 
+// Matrícula / credencial (trabajador) — revisión admin
+router.post('/mine/certification', requireAuth, uploadImage.single('file'), ctrl.uploadCertificationDoc);
+
 // Admin routes (IMPORTANTE: Proteger con middleware de rol admin)
 router.get('/admin/list', requireAuth, ctrl.listForAdmin);
 router.put('/:id/identity-review', requireAuth, ctrl.adminReviewIdentity);
+router.put('/:id/certification-review', requireAuth, ctrl.adminReviewCertification);
 
 router.get('/me/profile', requireAuth, ctrl.getMine);
 router.post('/me', requireAuth, ctrl.createMine);
