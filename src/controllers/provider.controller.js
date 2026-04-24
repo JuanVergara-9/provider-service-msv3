@@ -19,10 +19,15 @@ const createSchema = z.object({
   years_experience: z.number().int().min(0).max(80).optional(),
   price_hint: z.number().int().min(0).max(10000000).optional(),
   emergency_available: z.boolean().optional(),
-  business_hours: z.any().optional()
+  business_hours: z.any().optional(),
+  /** Solo en POST /mine (alta). Obligatorio `true` para aceptar análisis de actividad y reputación. */
+  reputation_consent: z.literal(true, {
+    error: () => ({ message: 'Debes aceptar el consentimiento de reputación: el análisis de actividad del servicio es obligatorio para registrarte como profesional.' })
+  })
 }).strict();
 
-const updateSchema = createSchema.partial();
+// No se permite modificar `reputation_consent` vía PUT (queda fijada en el alta).
+const updateSchema = createSchema.omit({ reputation_consent: true }).partial();
 
 async function getById(req, res, next) { try { const p = await svc.getById(Number(req.params.id)); res.json({ provider: p }); } catch (e) { next(e); } }
 
@@ -62,7 +67,19 @@ async function createMine(req, res, next) {
     const data = createSchema.parse(req.body);
     const p = await svc.createOrGetMine(userId, data);
     res.status(201).json({ provider: p });
-  } catch (e) { next(e); }
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      const first = e.issues && e.issues[0] ? e.issues[0].message : 'Solicitud inválida';
+      return res.status(400).json({
+        error: {
+          code: 'PROVIDER.VALIDATION',
+          message: first,
+          details: e.issues
+        }
+      });
+    }
+    next(e);
+  }
 }
 
 async function updateMine(req, res, next) {

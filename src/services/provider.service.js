@@ -105,7 +105,8 @@ async function createOrGetMine(userId, payload) {
     price_hint: payload.price_hint,
     emergency_available: payload.emergency_available,
     is_licensed: !!payload.is_licensed,
-    business_hours: payload.business_hours
+    business_hours: payload.business_hours,
+    reputation_consent: payload.reputation_consent === true
   });
   if (categoryIds.length > 0) await provider.setCategories(categoryIds);
   return getById(provider.id);
@@ -116,7 +117,7 @@ const FORBIDDEN_SELF_UPDATE = new Set([
   'is_licensed', 'is_pro', 'has_background_check', 'is_certified',
   'certification_status', 'certification_doc_url', 'certification_rejection_reason',
   'identity_status', 'identity_dni_front_url', 'identity_dni_back_url', 'identity_selfie_url', 'identity_rejection_reason',
-  'credits_balance', 'total_reviews', 'average_rating', 'total_earned'
+  'credits_balance', 'total_reviews', 'average_rating', 'total_earned', 'reputation_consent'
 ]);
 
 async function updateMine(userId, payload) {

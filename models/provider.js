@@ -44,6 +44,8 @@ module.exports = (sequelize, DataTypes) => {
     identity_rejection_reason: DataTypes.STRING,
     credits_balance: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     is_pro: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    /** Consentimiento explícito para análisis de actividad y perfil de reputación (obligatorio al alta). */
+    reputation_consent: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     total_reviews: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     average_rating: { type: DataTypes.DECIMAL(3, 2), allowNull: false, defaultValue: 0 },
     total_earned: { type: DataTypes.DECIMAL(14, 2), allowNull: false, defaultValue: 0 }
