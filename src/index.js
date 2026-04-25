@@ -53,7 +53,7 @@
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id']
+      allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id', 'x-internal-key']
     }));
 
     app.use(helmet());
@@ -91,6 +91,7 @@
     // Rutas
     try {
       console.log('[provider-service] Loading routes...');
+      app.use('/api/v1/internal', require('./routes/internal.routes'));
       app.use('/api/v1/providers', require('./routes/provider.routes'));
       app.use('/api/v1/categories', require('./routes/category.routes'));
       app.use('/api/v1/chat', require('./routes/chat.routes'));

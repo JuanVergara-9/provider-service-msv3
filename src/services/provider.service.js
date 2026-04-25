@@ -366,6 +366,19 @@ async function syncStats(providerId, payload) {
   return provider;
 }
 
+/**
+ * Lectura mínima para servicios internos (ej. notification-service, consent hook).
+ * @param {number|string} providerId
+ * @returns {Promise<{ reputation_consent: boolean }|null>} null si no existe el proveedor
+ */
+async function getReputationConsent(providerId) {
+  const id = Number(providerId);
+  if (!id || Number.isNaN(id)) return null;
+  const p = await Provider.findByPk(id, { attributes: ['id', 'reputation_consent'] });
+  if (!p) return null;
+  return { reputation_consent: p.reputation_consent === true };
+}
+
 module.exports = {
   getById,
   getMine,
@@ -377,5 +390,6 @@ module.exports = {
   setCertificationDocumentPending,
   getProviderSummary,
   getProviderUserIds,
-  syncStats
+  syncStats,
+  getReputationConsent
 };
