@@ -28,6 +28,9 @@ const createSchema = z.object({
 
 // No se permite modificar `reputation_consent` vía PUT (queda fijada en el alta).
 const updateSchema = createSchema.omit({ reputation_consent: true }).partial();
+const acceptReputationConsentSchema = z.object({
+  reputation_consent: z.literal(true).optional()
+}).strict();
 
 async function getById(req, res, next) { try { const p = await svc.getById(Number(req.params.id)); res.json({ provider: p }); } catch (e) { next(e); } }
 
@@ -88,6 +91,16 @@ async function updateMine(req, res, next) {
     if (!userId || isNaN(userId)) return res.status(401).json({ error: { code: 'PROVIDER.UNAUTHORIZED', message: 'No autorizado' } });
     const data = updateSchema.parse(req.body);
     const p = await svc.updateMine(userId, data);
+    res.json({ provider: p });
+  } catch (e) { next(e); }
+}
+
+async function acceptReputationConsent(req, res, next) {
+  try {
+    const userId = Number(req.user?.userId);
+    if (!userId || isNaN(userId)) return res.status(401).json({ error: { code: 'PROVIDER.UNAUTHORIZED', message: 'No autorizado' } });
+    acceptReputationConsentSchema.parse(req.body || {});
+    const p = await svc.acceptReputationConsent(userId);
     res.json({ provider: p });
   } catch (e) { next(e); }
 }
@@ -274,6 +287,7 @@ module.exports = {
   getMine,
   createMine,
   updateMine,
+  acceptReputationConsent,
   list,
   uploadAvatar,
   deleteAvatar,

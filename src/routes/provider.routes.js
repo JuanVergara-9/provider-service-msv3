@@ -28,6 +28,7 @@ const uploadIdentity = uploadImageMultiple.fields([
 router.get('/mine', requireAuth, ctrl.getMine); // alias para compatibilidad con el frontend
 router.post('/mine', requireAuth, ctrl.createMine);
 router.put('/mine', requireAuth, ctrl.updateMine);
+router.put('/mine/reputation-consent', requireAuth, ctrl.acceptReputationConsent);
 
 // Availability (edición desde perfil, sin tocar registro)
 router.get('/mine/availability', requireAuth, ctrl.getMyAvailability);
@@ -51,6 +52,7 @@ router.put('/:id/certification-review', requireAuth, ctrl.adminReviewCertificati
 router.get('/me/profile', requireAuth, ctrl.getMine);
 router.post('/me', requireAuth, ctrl.createMine);
 router.put('/me', requireAuth, ctrl.updateMine);
+router.put('/me/reputation-consent', requireAuth, ctrl.acceptReputationConsent);
 
 // Ruta con parámetro numérico al final para evitar capturar '/mine'
 router.get('/:id/availability', ctrl.getAvailability);

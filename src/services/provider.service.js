@@ -182,6 +182,15 @@ async function setCertificationDocumentPending(userId, docUrl) {
   return getMine(userId);
 }
 
+/** Aceptación de consentimiento de reputación para perfiles legacy. */
+async function acceptReputationConsent(userId) {
+  const mine = await getMine(userId);
+  if (!mine) throw notFound('PROVIDER.NOT_FOUND', 'Aún no tienes perfil de proveedor');
+  if (mine.reputation_consent === true) return mine;
+  await mine.update({ reputation_consent: true });
+  return getMine(userId);
+}
+
 /**
  * Listado con filtros básicos y, opcionalmente, distancia (Haversine).
  * params: { categorySlug, categoryName, city, lat, lng, radiusKm, limit, offset, urgency }
@@ -388,6 +397,7 @@ module.exports = {
   setAvatar,
   clearAvatar,
   setCertificationDocumentPending,
+  acceptReputationConsent,
   getProviderSummary,
   getProviderUserIds,
   syncStats,
