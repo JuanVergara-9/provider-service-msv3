@@ -3,6 +3,16 @@ const { appEmitter, EVENTS } = require('../utils/events');
 const { getDistanceKm } = require('../utils/geo');
 const axios = require('axios');
 
+function notificationInternalHeaders() {
+    const key = (
+        process.env.NOTIFICATION_INTERNAL_API_KEY ||
+        process.env.CREDIT_EVENTS_INTERNAL_KEY ||
+        process.env.JWT_SECRET ||
+        ''
+    ).trim();
+    return key ? { 'x-internal-key': key } : {};
+}
+
 /** Pedidos sin fecha o con fecha inválida se consideran recientes (no ocultar en el feed). */
 function isOrderWithinRetentionHours(createdAt, maxHours) {
     if (createdAt == null) return true;
@@ -145,7 +155,7 @@ class OrderService {
                                 workerName: provider.first_name,
                                 category: categoryName
                             },
-                            { timeout: 8000 }
+                            { headers: notificationInternalHeaders(), timeout: 8000 }
                         ).then(() => {
                             console.log(`[Notification-Trigger] WhatsApp enviado a ${provider.first_name}.`);
                         }).catch(err => {
@@ -556,14 +566,13 @@ class OrderService {
             axios.post(
                 `${notificationUrl.replace(/\/+$/, '')}/api/v1/notifications/send-whatsapp`,
                 { phoneNumber: provider.whatsapp_e164 || provider.phone_e164, workerName, category: categoryName },
-                { timeout: 8000 }
+                { headers: notificationInternalHeaders(), timeout: 8000 }
             ).catch(err => console.error('[OrderService] notification send-whatsapp failed:', err.message));
         }
 
         // Credit History: emit LEAD_PAID or LEAD_DEBT event (fire-and-forget)
         if (notificationUrl) {
             const creditEventType = orderStatus === 'MATCHED_PAID' ? 'LEAD_PAID' : 'LEAD_DEBT';
-            const internalKey = process.env.CREDIT_EVENTS_INTERNAL_KEY || process.env.JWT_SECRET || '';
             axios.post(
                 `${notificationUrl.replace(/\/+$/, '')}/api/v1/internal/credit-events`,
                 {
@@ -573,7 +582,7 @@ class OrderService {
                     metadata: { order_id: order.id, service_request_id: requestId },
                     source: 'web'
                 },
-                { headers: { 'x-internal-key': internalKey }, timeout: 8000 }
+                { headers: notificationInternalHeaders(), timeout: 8000 }
             ).catch(err => console.error(`[OrderService] Credit event ${creditEventType} failed:`, err.message));
         }
 
