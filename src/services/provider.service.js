@@ -116,6 +116,7 @@ async function createOrGetMine(userId, payload) {
 const FORBIDDEN_SELF_UPDATE = new Set([
   'is_licensed', 'is_pro', 'has_background_check', 'is_certified',
   'certification_status', 'certification_doc_url', 'certification_rejection_reason',
+  'certification_credential_type',
   'identity_status', 'identity_dni_front_url', 'identity_dni_back_url', 'identity_selfie_url', 'identity_rejection_reason',
   'credits_balance', 'total_reviews', 'average_rating', 'total_earned', 'reputation_consent'
 ]);
@@ -170,14 +171,20 @@ async function clearAvatar(userId) {
   return mine;
 }
 
-async function setCertificationDocumentPending(userId, docUrl) {
+async function setCertificationDocumentPending(userId, docUrl, credentialType) {
   const mine = await getMine(userId);
   if (!mine) throw notFound('PROVIDER.NOT_FOUND', 'Aún no tienes perfil de proveedor');
+  const allowed = new Set(['matricula', 'certificado']);
+  const normalized =
+    credentialType && typeof credentialType === 'string' && allowed.has(credentialType.trim().toLowerCase())
+      ? credentialType.trim().toLowerCase()
+      : null;
   await mine.update({
     certification_doc_url: docUrl,
     certification_status: 'pending',
     certification_rejection_reason: null,
-    is_certified: false
+    is_certified: false,
+    ...(normalized ? { certification_credential_type: normalized } : {}),
   });
   return getMine(userId);
 }

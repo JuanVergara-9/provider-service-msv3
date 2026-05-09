@@ -179,13 +179,19 @@ async function uploadCertificationDoc(req, res, next) {
     const userId = Number(req.user?.userId);
     if (!userId || isNaN(userId)) return res.status(401).json({ error: 'No autorizado' });
     if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'Archivo requerido' });
+    const raw = String(req.body?.credential_type ?? req.body?.credentialType ?? '').trim().toLowerCase();
+    if (raw !== 'matricula' && raw !== 'certificado') {
+      return res.status(400).json({
+        error: 'credential_type es obligatorio: "matricula" o "certificado"',
+      });
+    }
     const mine = await svc.getMine(userId);
     if (!mine) return res.status(404).json({ error: 'Perfil no encontrado' });
     const uploadResult = await uploadBuffer(req.file.buffer, {
       folder: 'miservicio/providers/certifications',
       public_id: `cert_${mine.id}_${Date.now()}`
     });
-    const updated = await svc.setCertificationDocumentPending(userId, uploadResult.secure_url);
+    const updated = await svc.setCertificationDocumentPending(userId, uploadResult.secure_url, raw);
     res.json({ provider: updated });
   } catch (e) { next(e); }
 }

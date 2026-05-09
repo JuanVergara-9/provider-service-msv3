@@ -29,6 +29,8 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 'not_submitted'
     },
     certification_doc_url: DataTypes.STRING(512),
+    /** Declarado por el trabajador al subir: matricula | certificado */
+    certification_credential_type: DataTypes.STRING(32),
     certification_rejection_reason: DataTypes.STRING,
     business_hours: DataTypes.JSONB,
     avatar_url: DataTypes.STRING(512),
