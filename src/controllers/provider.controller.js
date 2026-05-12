@@ -28,9 +28,6 @@ const createSchema = z.object({
 
 // No se permite modificar `reputation_consent` vía PUT (queda fijada en el alta).
 const updateSchema = createSchema.omit({ reputation_consent: true }).partial();
-const acceptReputationConsentSchema = z.object({
-  reputation_consent: z.literal(true).optional()
-}).strict();
 
 async function getById(req, res, next) { try { const p = await svc.getById(Number(req.params.id)); res.json({ provider: p }); } catch (e) { next(e); } }
 
@@ -99,10 +96,26 @@ async function acceptReputationConsent(req, res, next) {
   try {
     const userId = Number(req.user?.userId);
     if (!userId || isNaN(userId)) return res.status(401).json({ error: { code: 'PROVIDER.UNAUTHORIZED', message: 'No autorizado' } });
-    acceptReputationConsentSchema.parse(req.body || {});
+
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    if (Object.prototype.hasOwnProperty.call(body, 'reputation_consent')) {
+      const v = body.reputation_consent;
+      const ok = v === true || v === 1 || String(v).toLowerCase() === 'true';
+      if (!ok) {
+        return res.status(400).json({
+          error: {
+            code: 'PROVIDER.VALIDATION',
+            message: 'Para aceptar el consentimiento enviá reputation_consent: true.',
+          },
+        });
+      }
+    }
+
     const p = await svc.acceptReputationConsent(userId);
     res.json({ provider: p });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 }
 
 async function uploadAvatar(req, res, next) {
